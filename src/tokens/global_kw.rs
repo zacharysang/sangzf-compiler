@@ -5,22 +5,22 @@ pub struct GlobalKW {
   pub state: Option<tokenize::State>
 }
 
-impl tokenize::Token for GlobalKW {
+impl tokenize::Lexable for GlobalKW {
   
-  fn start() -> GlobalKW {
-    return GlobalKW {state: Some(tokenize::State::new(0))};
+  fn start() -> tokenize::Token {
+    return tokenize::Token::GlobalKW( GlobalKW {state: Some(tokenize::State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
-    match &self.state {
+    match &mut self.state {
       Some(state_val) => {
         match (state_val.label, ch) {
-          (0, 'g') => self.state = Some(tokenize::State::new(1)),
-          (1, 'l') => self.state = Some(tokenize::State::new(2)),
-          (2, 'o') => self.state = Some(tokenize::State::new(3)),
-          (3, 'b') => self.state = Some(tokenize::State::new(4)),
-          (4, 'a') => self.state = Some(tokenize::State::new(5)),
-          (5, 'l') => self.state = Some(tokenize::State::new(6).as_accept()),
+          (0, 'g') => {state_val.to(1, ch);},
+          (1, 'l') => {state_val.to(2, ch);},
+          (2, 'o') => {state_val.to(3, ch);},
+          (3, 'b') => {state_val.to(4, ch);},
+          (4, 'a') => {state_val.to(5, ch);},
+          (5, 'l') => {state_val.to(6, ch).as_accept();},
           _ => self.state = None
         }
       },

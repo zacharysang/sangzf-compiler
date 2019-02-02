@@ -5,27 +5,27 @@ pub struct ProgramKW {
   pub state: Option<tokenize::State>
 }
 
-impl tokenize::Token for ProgramKW {
+impl tokenize::Lexable for ProgramKW {
 
-  fn start() -> ProgramKW {
-    return ProgramKW {state: Some(tokenize::State::new(0))};
+  fn start() -> tokenize::Token {
+    return tokenize::Token::ProgramKW(ProgramKW {state: Some(tokenize::State::new(0))});
   }
 
   fn next(&mut self, ch: char) {
-
+  
     // we match a mutable reference to this enum so we only borrow the value
-    match &self.state {
+    match &mut self.state {
     
       Some(state_val) => {
         
         match (state_val.label, ch) {
-          (0, 'p') => self.state = Some(tokenize::State::new(1)),
-          (1, 'r') => self.state = Some(tokenize::State::new(2)),
-          (2, 'o') => self.state = Some(tokenize::State::new(3)),
-          (3, 'g') => self.state = Some(tokenize::State::new(4)),
-          (4, 'r') => self.state = Some(tokenize::State::new(5)),
-          (5, 'a') => self.state = Some(tokenize::State::new(6)),
-          (6, 'm') => self.state = Some(tokenize::State::new(7).as_accept()),
+          (0, 'p') => {state_val.to(1, ch);},
+          (1, 'r') => {state_val.to(2, ch);},
+          (2, 'o') => {state_val.to(3, ch);},
+          (3, 'g') => {state_val.to(4, ch);},
+          (4, 'r') => {state_val.to(5, ch);},
+          (5, 'a') => {state_val.to(6, ch);}
+          (6, 'm') => {state_val.to(7, ch).as_accept();},
           _ => self.state = None
         }
         

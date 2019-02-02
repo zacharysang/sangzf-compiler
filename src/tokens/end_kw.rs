@@ -5,19 +5,19 @@ pub struct EndKW {
   pub state: Option<tokenize::State>
 }
 
-impl tokenize::Token for EndKW {
+impl tokenize::Lexable for EndKW {
   
-  fn start() -> EndKW {
-    return EndKW {state: Some(tokenize::State::new(0))};
+  fn start() -> tokenize::Token {
+    return tokenize::Token::EndKW( EndKW {state: Some(tokenize::State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
-    match &self.state {
+    match &mut self.state {
       Some(state_val) => {
         match (state_val.label, ch) {
-          (0, 'e') => self.state = Some(tokenize::State::new(1)),
-          (1, 'n') => self.state = Some(tokenize::State::new(2)),
-          (2, 'd') => self.state = Some(tokenize::State::new(3).as_accept()),
+          (0, 'e') => {state_val.to(1, ch);},
+          (1, 'n') => {state_val.to(2, ch);},
+          (2, 'd') => {state_val.to(3, ch).as_accept();},
           _ => self.state = None
         }
       },
