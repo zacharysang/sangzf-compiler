@@ -36,106 +36,79 @@ fn main() {
   let mut curr = symbols.next();
   while let Some(ch) = curr {
   
-    // on whitespace, attempt to pull out the token
-    // there should be only one eligible, else there is an error
+    // on whitespace check that we aren't in the middle of a token's machine
+    // instead we should be in state 0 for all types
     if tokenize::is_ws(ch) {
     
-      let mut num_eligible = 0;
-      let mut eligible_idx = None;
+      // count the number of types that are in the middle of the state machine
+      let mut num_middle = 0;
       
       // take inventory of valid tokens at point of whitespace
-      for (i, token) in token_types.iter().enumerate() {
-        match token.get_state() {
-          None => (),
-          Some(state) => {
-          
-            if state.accept {
-              num_eligible += 1;
-              eligible_idx = Some(i);
-            }
-            
+      for token in token_types.iter() {
+        if let Some(state) = token.get_state() {
+          if state.label != 0 { 
+            num_middle += 1; 
+            break;
           }
         }
       }
       
       // if there is an eligible idx, see if it is unique
-      if let Some(idx) = eligible_idx {
+      if num_middle != 0 {
+        // error no unique token at whitespace
+        println!("Error! - Found whitespace without forming a token");
+      }
       
-        if num_eligible == 1 {
-          // emit this token
-          let tok = &token_types[idx];
-          let state = tok.get_state();
-          if let Some(state_val) = state {
-            println!("(at ws) got token: {}", state_val.chars);
+      // reset the list of token type candidates
+      token_types = get_all_types();
+      
+    } else {
+    
+      // advance all token types until there is only 1 that isn't 'None'
+      let mut remaining = token_types.len();
+      let mut lexeme = None;
+  
+      // cannot use '&mut' here since iter_mut is giving up ownership of the IterMut struct and we must take this ownership
+      // 'token' does not need to be mutable since we are working with and IterMut object. This object owns a mutable reference to the value we are modifying
+      for token in token_types.iter_mut() {
+      
+        match token.next(ch) {
+          Some(state_val) => {
+            if state_val.accept {
+              lexeme = Some(token);
+            }
+          },
+          None => {
+            remaining -= 1;
           }
-          
-        } else {
-          // error no unique token at whitespace
-          println!("Error! - Reached whitespace without forming a unique token");
+        }
+      }
+      
+      
+      // emit token if there is only 1 token type (all others are 'None')
+      if remaining == 1 {
+        
+        // will put into symbol table here
+        
+        // reset the list of token types
+        if let Some(tok) = lexeme {
+          if let Some(state_val) = tok.get_state() {
+            println!("**got token with chars: '{}' and state {}", state_val.chars, state_val.label);
+            
+            // reset the list of token type candidates
+            token_types = get_all_types();
+          }
         }
         
-      } else {
-        // error no valid tokens at whitespace
-        println!("Error! - Reached whitespace without forming a valid token");
+      } else if remaining == 0 {
+        // error - no eligible token type
+        println!("Error! - No eligible token type with ch: '{}'", ch);
       }
       
-      
-      // at a whitespace, always restart search for next token
-      token_types = get_all_types();
-      curr = symbols.next();
-      continue;
     }
-    
-    // advance all token types
-    let mut remaining = token_types.len();
-    let mut lexeme = None;
-    
-    // cannot use '&mut' here since iter_mut is giving up ownership of the IterMut struct and we must take this ownership
-    // 'token' does not need to be mutable since we are working with and IterMut object. This object owns a mutable reference to the value we are modifying
-    for (i, token) in token_types.iter_mut().enumerate() {
-    
-      let state = token.next(ch);
-      
-      match state {
-        Some(state_val) => {
-          if state_val.accept {
-            lexeme = Some(token);
-          }
-        },
-        None => {remaining -= 1;}
-      }
-    }
-    
-    // if there is only 1 token type, then add it to tokens list
-    if remaining == 1 {
-      
-      //let lexemes : LinkedList<Box<Token>> = currTokenTypes.drain().collect();
-      //tokens.append(lexemes);
-      
-      // will put into symbol table here
-      
-      // refresh the list list of token types
-      if let Some(tok) = lexeme {
-        if let Some(state_val) = tok.get_state() {
-          println!("**got token with chars: '{}' and state {}", state_val.chars, state_val.label);
-          
-          token_types = get_all_types();
-        }
-      }
-      
-    } else if remaining == 0 {
-      // error - no eligible token type
-      println!("Error! - no eligible token type with ch: '{}'", ch);
-      break;
-    }
-    
+
+    // get the next character in the program
     curr = symbols.next();
   }
-  
-  // after reading the whole program, check if there is a token left
-  /*
-  for token in tokens {
-    println!("a token");
-  }
-  */
+
 }
