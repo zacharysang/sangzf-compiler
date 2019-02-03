@@ -8,7 +8,9 @@ mod tokens;
 use crate::tokenize::Token;
 use crate::tokenize::Lexable;
 
-fn get_all_types<'a>() -> Box<Vec<Token>> {
+fn all_types<'a>() -> Box<Vec<Token>> {
+
+  // TODO put all these into a direct declaration rather than adding them all in
   let mut token_types : Box<Vec<Token>> = Box::new(Vec::new());
   
   token_types.push(tokens::program_kw::ProgramKW::start());
@@ -18,16 +20,48 @@ fn get_all_types<'a>() -> Box<Vec<Token>> {
   token_types.push(tokens::semicolon::Semicolon::start());
   token_types.push(tokens::is_kw::IsKW::start());
   token_types.push(tokens::global_kw::GlobalKW::start());
+  token_types.push(tokens::procedure_kw::ProcedureKW::start());
+  token_types.push(tokens::parens::LParen::start());
+  token_types.push(tokens::parens::RParen::start());
+  token_types.push(tokens::comma::Comma::start());
+  token_types.push(tokens::variable_kw::VariableKW::start());
+  token_types.push(tokens::type_kw::TypeKW::start());
+  token_types.push(tokens::braces::LBrace::start());
+  token_types.push(tokens::braces::RBrace::start());
+  token_types.push(tokens::integer_kw::IntegerKW::start());
+  token_types.push(tokens::float_kw::FloatKW::start());
+  token_types.push(tokens::string_kw::StringKW::start());
+  token_types.push(tokens::bool_kw::BoolKW::start());
+  token_types.push(tokens::enum_kw::EnumKW::start());
+  token_types.push(tokens::dash::Dash::start());
+  token_types.push(tokens::if_kw::IfKW::start());
+  token_types.push(tokens::then_kw::ThenKW::start());
+  token_types.push(tokens::else_kw::ElseKW::start());
+  token_types.push(tokens::for_kw::ForKW::start());
+  token_types.push(tokens::return_kw::ReturnKW::start());
+  token_types.push(tokens::not_kw::NotKW::start());
+  token_types.push(tokens::ampersand::Ampersand::start());
+  token_types.push(tokens::plus::Plus::start());
+  token_types.push(tokens::true_kw::TrueKW::start());
+  token_types.push(tokens::false_kw::FalseKW::start());
+  token_types.push(tokens::lt::LT::start());
+  token_types.push(tokens::gt::GT::start());
+  token_types.push(tokens::lte::LTE::start());
+  token_types.push(tokens::gte::GTE::start());
+  token_types.push(tokens::eq::EQ::start());
+  token_types.push(tokens::neq::NEQ::start());
+  token_types.push(tokens::asterisk::Asterisk::start());
+  token_types.push(tokens::slash::Slash::start());
   
   return token_types;
 }
 
 fn main() {
 
-  let program = String::from("global program begin is end program.");
+  let program = String::from("global program begin is end program. (procedure), type-{variable} integer float string bool enum if then else for return & not + true false ; > < >= <= == != * /");
 
   // make a collection with state for all token types
-  let mut token_types = get_all_types();
+  let mut token_types = all_types();
   
   let mut lexemes : Vec<Box<Token>> = Vec::new();
   
@@ -53,14 +87,14 @@ fn main() {
         }
       }
       
-      // if there is an eligible idx, see if it is unique
+      // TODO add logic here to check if valid token (lt vs. lte)
       if num_middle != 0 {
         // error no unique token at whitespace
         println!("Error! - Found whitespace without forming a token");
       }
       
       // reset the list of token type candidates
-      token_types = get_all_types();
+      token_types = all_types();
       
     } else {
     
@@ -96,7 +130,7 @@ fn main() {
             println!("**got token with chars: '{}' and state {}", state_val.chars, state_val.label);
             
             // reset the list of token type candidates
-            token_types = get_all_types();
+            token_types = all_types();
           }
         }
         
