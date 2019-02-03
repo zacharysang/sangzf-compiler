@@ -76,19 +76,29 @@ fn main() {
     
       // count the number of types that are in the middle of the state machine
       let mut num_middle = 0;
+      let mut num_accept = 0;
+      let mut lexeme = None;
       
       // take inventory of valid tokens at point of whitespace
       for token in token_types.iter() {
         if let Some(state) = token.get_state() {
-          if state.label != 0 { 
+          if state.accept {
+            num_accept += 1;
+            lexeme = Some(token);
+          } else if state.label != 0 { 
             num_middle += 1; 
-            break;
           }
         }
       }
       
       // TODO add logic here to check if valid token (lt vs. lte)
-      if num_middle != 0 {
+      if num_accept == 1 {
+        if let Some(tok) = lexeme {
+          if let Some(state_val) = tok.get_state() {
+            println!("**got token with chars: '{}' and state {}", state_val.chars, state_val.label);
+          }
+        }
+      } else if num_middle != 0 {
         // error no unique token at whitespace
         println!("Error! - Found whitespace without forming a token");
       }
