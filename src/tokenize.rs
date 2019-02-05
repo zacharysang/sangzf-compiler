@@ -21,6 +21,7 @@ impl State {
   
   pub fn to(&mut self, label: u32, ch: char) -> &mut State {
     self.label = label;
+    self.accept = false;
     self.chars.push(ch);
     
     return self;
