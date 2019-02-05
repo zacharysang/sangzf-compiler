@@ -68,7 +68,6 @@ fn all_tokens() -> Box<Vec<Token>> {
   token_types.push(tokens::slash::Slash::start());
   token_types.push(tokens::assign::Assign::start());
   
-  // TODO activate these
   token_types.push(tokens::identifier::Identifier::start());
   token_types.push(tokens::number::Number::start());
   token_types.push(tokens::string::String::start());
@@ -112,7 +111,6 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
   // the value we will eventually return
   let mut next_token = None;
   
-  // TODO make this start on a non-whitespace
   let mut curr_ch = program.next();
   while let Some(ch) = curr_ch {
     if !tokenize::is_ws(ch) {
