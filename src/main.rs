@@ -71,7 +71,7 @@ fn all_tokens() -> Box<Vec<Token>> {
   // TODO activate these
   token_types.push(tokens::identifier::Identifier::start());
   token_types.push(tokens::number::Number::start());
-  //token_types.push(tokens::string::String::start());
+  token_types.push(tokens::string::String::start());
   
   // These must be last so that they overwrite others
   token_types.push(tokens::program_kw::ProgramKW::start());
@@ -183,7 +183,7 @@ fn main() {
   let mut counter = 0;
   
   // test program
-  let program = String::from("program procedure global variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | := abcdef 1234 898.99");
+  let program = String::from("program procedure global variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | := abcdef 1234 898.99 \"stringgoeshere\"  \"fancie$t  string_g0es\n\nhere\t\"");
   
   let mut program_chars = program.chars();
 

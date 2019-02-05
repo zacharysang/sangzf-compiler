@@ -14,7 +14,10 @@ impl tokenize::Lexable for String {
   fn next(&mut self, ch: char) {
     match &mut self.state {
       Some(state_val) => {
-        match (state_val.label, ch) {
+        match (state_val.label, tokenize::CharGroup::get(ch)) {
+          (0, tokenize::CharGroup::Other('"')) => { state_val.to(1, ch); },
+          (1, tokenize::CharGroup::Other('"')) => { state_val.to(2, ch).as_accept(); },
+          (1, _) => { state_val.to(1, ch); }
           _ => self.state = None
         }
       },
