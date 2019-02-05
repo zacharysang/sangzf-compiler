@@ -7,6 +7,7 @@ mod tokens;
 // bring Token into scope so we can use its associated items
 use crate::tokenize::Token;
 use crate::tokenize::Lexable;
+use crate::tokenize::TokenEntry;
 
 fn all_keywords() -> Box<Vec<Token>> {
   let mut keywords = Box::new(Vec::new());
@@ -95,6 +96,71 @@ fn all_tokens() -> Box<Vec<Token>> {
   return token_types;
 }
 
+fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
+  
+  // make a collection with state for all token types
+  let mut token_types = all_tokens();
+    
+  // information about an acceptable token
+  // (not accepted until last option)
+  let mut acceptable_idx = None;
+  let mut acceptable_chars = None;
+  
+  // the value we will eventually return
+  let mut next_token = None;
+  
+  // while at least one token is alive, keep adding characters
+  // if the token is acceptable, save it
+  // when none are alive state, return accept token
+  // if acceptable == None, error
+  let mut alive = true;
+  while alive {
+  
+    // advance the character iterator
+    let curr = program.next();
+  
+    alive = false;
+    
+    if let Some(ch) = curr {
+    
+      for (i, token) in token_types.iter_mut().enumerate() {
+      
+        // advance curr type
+        if let Some(state) = token.next(ch) {
+          alive = true;
+          
+          // check if acceptable
+          if state.accept {
+          
+            // make a new Token that matches this element
+            acceptable_idx = Some(i);
+            
+            // get a copy of the string
+            acceptable_chars = Some(String::from(&state.chars[..]));
+          }
+        }
+        
+      }
+    }
+  }
+  
+  if let Some(idx) = acceptable_idx {
+  
+    // print acceptable chars
+    if let Some(chars) = acceptable_chars {
+      if let Some(tok_type) = token_types.drain(idx..idx+1).next() {
+        next_token = Some(TokenEntry { chars: chars, tok_type: tok_type });
+      }
+    }
+
+  } else {
+    println!("Error! - Could not produce token. Returning None");
+  }
+  
+    return next_token;
+  
+}
+
 fn main() {
 
   let mut counter = 0;
@@ -104,121 +170,16 @@ fn main() {
   
   let mut program_chars = program.chars();
 
-  // make a collection with state for all token types
-  let mut token_types = all_tokens();
+  // TODO change this to read until EOF is reached (instead of until no valid token)
+  let mut token = next_tok(&mut program_chars);
+  while let Some(tok) = token {
   
-  // iterate over all chars in the program
-  let mut curr = program_chars.next();
-  while let Some(ch) = curr {
-  
-    // on whitespace check that we aren't in the middle of a token's machine
-    // instead we should be in state 0 for all types
-    if tokenize::is_ws(ch) {
-    
-      // count the number of types that are in the middle of the state machine
-      let mut num_middle = 0;
-      let mut num_accept = 0;
-      let mut lexeme = None;
-      
-      // take inventory of valid tokens at point of whitespace
-      for token in token_types.iter() {
-      
-        if let Some(state) = token.get_state() {
-          if state.accept {
-            num_accept += 1;
-            lexeme = Some(token);
-          } else if state.label != 0 { 
-            num_middle += 1; 
-          }
-        }
-      }
-      
-      if num_accept == 1 {
-        if let Some(tok) = lexeme {
-        
-          if let Some(state_val) = tok.get_state() {
-            println!("**got token (@ws) with chars: '{}' and state {}", state_val.chars, state_val.label);
-            counter += 1;
-          }
-          
-        }
-      } else if num_middle != 0 {
-        // error no unique token at whitespace
-        println!("Error! - Found whitespace without forming a token");
-      }
-      
-      // reset the list of token type candidates
-      token_types = all_tokens();
-      
-      
-    } else {
-    
-    
-      // advance all token types until there is only 1 that isn't 'None'
-      let mut remaining = token_types.len();
-      let mut lexeme = None;
-  
-      // cannot use '&mut' here since iter_mut is giving up ownership of the IterMut struct and we must take this ownership
-      // 'token' does not need to be mutable since we are working with and IterMut object. This object owns a mutable reference to the value we are modifying
-      for token in token_types.iter_mut() {
-      
-        match token.next(ch) {
-          Some(state_val) => {
-            if state_val.accept {
-              lexeme = Some(token);
-            }
-          },
-          None => {
-            remaining -= 1;
-          }
-        }
-      }
-      
-      
-      // emit token if there is only 1 token type (all others are 'None')
-      if remaining == 1 {
-        
-        // will put into symbol table here
-        
-        // reset the list of token types
-        if let Some(tok) = lexeme {
-          if let Some(state_val) = tok.get_state() {
-            counter += 1;
-            println!("**got token with chars: '{}' and state {}", state_val.chars, state_val.label);
-            
-            // reset the list of token type candidates
-            token_types = all_tokens();
-          }
-        }
-        
-      } else if remaining == 0 {
-        // error - no eligible token type
-        println!("Error! - No eligible token type with ch: '{}'", ch);
-        
-        // restart search
-        token_types = all_tokens();
-      } else if let Some(tok) = lexeme {
-      
-        // if remaining > 1, check if lexeme is a kw
-        
-        if tok.is_kw() {
-          if let Some(state_val) = tok.get_state() {
-            counter += 1;
-            println!("** got token (keyword): '{}'", state_val.chars);
-            
-            // reset the list of token type candidates
-            token_types = all_tokens();
-          }
-        }
-        
-      }
-      
-    }
+    println!("got token with chars: {}", tok.chars);
 
-    // get the next character in the program
-    curr = program_chars.next();
+    token = next_tok(&mut program_chars);
+    counter += 1;
   }
-  
+    
   println!("num tokens: {}", counter);
-
+  
 }

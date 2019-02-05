@@ -1,5 +1,6 @@
 // bring this into scope so that token-related utilities can be used
 use crate::tokenize;
+
 pub struct VariableKW {
   pub state: Option<tokenize::State>
 }
