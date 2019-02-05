@@ -9,6 +9,8 @@ use crate::tokenize::Token;
 use crate::tokenize::Lexable;
 use crate::tokenize::TokenEntry;
 
+// TODO move a lot of this into a Lexer.rs
+// TODO Lexer.rs should read in files
 fn all_keywords() -> Box<Vec<Token>> {
   let mut keywords = Box::new(Vec::new());
   
@@ -66,6 +68,7 @@ fn all_tokens() -> Box<Vec<Token>> {
   token_types.push(tokens::slash::Slash::start());
   token_types.push(tokens::assign::Assign::start());
   
+  // TODO activate these
   //token_types.push(tokens::identifier::Identifier::start());
   //token_types.push(tokens::number::Number::start());
   //token_types.push(tokens::string::String::start());
@@ -109,6 +112,17 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
   // the value we will eventually return
   let mut next_token = None;
   
+  // TODO make this start on a non-whitespace
+  let mut curr_ch = program.next();
+  while let Some(ch) = curr_ch {
+    if !tokenize::is_ws(ch) {
+      break;
+    }
+    
+    curr_ch = program.next();
+  }
+  
+  
   // while at least one token is alive, keep adding characters
   // if the token is acceptable, save it
   // when none are alive state, return accept token
@@ -116,12 +130,12 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
   let mut alive = true;
   while alive {
   
-    // advance the character iterator
-    let curr = program.next();
-  
     alive = false;
     
-    if let Some(ch) = curr {
+    if let Some(ch) = curr_ch {
+    
+    
+      println!("ch: '{}", ch);
     
       for (i, token) in token_types.iter_mut().enumerate() {
       
@@ -142,6 +156,13 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
         
       }
     }
+    
+    
+    // advance the character iterator unless dead
+    if alive {
+      curr_ch = program.next();
+    }
+    
   }
   
   if let Some(idx) = acceptable_idx {
@@ -166,7 +187,7 @@ fn main() {
   let mut counter = 0;
   
   // test program
-  let program = String::from("program procedure global variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | :=");
+  let program = String::from("program    procedure global variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | :=");
   
   let mut program_chars = program.chars();
 
