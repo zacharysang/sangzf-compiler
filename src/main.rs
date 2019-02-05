@@ -11,35 +11,6 @@ use crate::tokenize::TokenEntry;
 
 // TODO move a lot of this into a Lexer.rs
 // TODO Lexer.rs should read in files
-fn all_keywords() -> Box<Vec<Token>> {
-  let mut keywords = Box::new(Vec::new());
-  
-  keywords.push(tokens::program_kw::ProgramKW::start());
-  keywords.push(tokens::begin_kw::BeginKW::start());
-  keywords.push(tokens::end_kw::EndKW::start());
-  keywords.push(tokens::is_kw::IsKW::start());
-  keywords.push(tokens::global_kw::GlobalKW::start());
-  keywords.push(tokens::procedure_kw::ProcedureKW::start());
-  keywords.push(tokens::variable_kw::VariableKW::start());
-  keywords.push(tokens::type_kw::TypeKW::start());
-  keywords.push(tokens::integer_kw::IntegerKW::start());
-  keywords.push(tokens::float_kw::FloatKW::start());
-  keywords.push(tokens::string_kw::StringKW::start());
-  keywords.push(tokens::bool_kw::BoolKW::start());
-  keywords.push(tokens::enum_kw::EnumKW::start());
-  keywords.push(tokens::if_kw::IfKW::start());
-  keywords.push(tokens::then_kw::ThenKW::start());
-  keywords.push(tokens::else_kw::ElseKW::start());
-  keywords.push(tokens::for_kw::ForKW::start());
-  keywords.push(tokens::return_kw::ReturnKW::start());
-  keywords.push(tokens::not_kw::NotKW::start());
-  keywords.push(tokens::true_kw::TrueKW::start());
-  keywords.push(tokens::false_kw::FalseKW::start());
-  
-  return keywords;
-  
-}
-
 fn all_tokens() -> Box<Vec<Token>> {
 
   // TODO put all these into a direct declaration rather than adding them all in

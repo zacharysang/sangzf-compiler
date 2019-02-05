@@ -201,33 +201,6 @@ impl Token {
     }
   }
   
-  pub fn is_kw(&self) -> bool {
-    match self {
-      Token::ProgramKW(_) 
-      | Token::BeginKW(_) 
-      | Token::EndKW(_) 
-      | Token::IsKW(_) 
-      | Token::GlobalKW(_) 
-      | Token::ProcedureKW(_) 
-      | Token::VariableKW(_) 
-      | Token::TypeKW(_) 
-      | Token::IntegerKW(_) 
-      | Token::FloatKW(_) 
-      | Token::StringKW(_) 
-      | Token::BoolKW(_) 
-      | Token::EnumKW(_) 
-      | Token::IfKW(_) 
-      | Token::ThenKW(_) 
-      | Token::ElseKW(_) 
-      | Token::ForKW(_) 
-      | Token::ReturnKW(_) 
-      | Token::NotKW(_) 
-      | Token::TrueKW(_) 
-      | Token::FalseKW(_) => true,
-      _ => false
-    }
-  }
-  
 }
 
 pub fn is_ws(ch: char) -> bool {
