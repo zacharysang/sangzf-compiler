@@ -69,7 +69,7 @@ fn all_tokens() -> Box<Vec<Token>> {
   token_types.push(tokens::assign::Assign::start());
   
   // TODO activate these
-  //token_types.push(tokens::identifier::Identifier::start());
+  token_types.push(tokens::identifier::Identifier::start());
   //token_types.push(tokens::number::Number::start());
   //token_types.push(tokens::string::String::start());
   
@@ -134,9 +134,6 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
     
     if let Some(ch) = curr_ch {
     
-    
-      println!("ch: '{}", ch);
-    
       for (i, token) in token_types.iter_mut().enumerate() {
       
         // advance curr type
@@ -157,8 +154,7 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
       }
     }
     
-    
-    // advance the character iterator unless dead
+    // advance the character iterator unless dead (= about to exit loop)
     if alive {
       curr_ch = program.next();
     }
@@ -187,12 +183,13 @@ fn main() {
   let mut counter = 0;
   
   // test program
-  let program = String::from("program    procedure global variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | :=");
+  let program = String::from("program procedure global variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | := abcdef ");
   
   let mut program_chars = program.chars();
 
   // TODO change this to read until EOF is reached (instead of until no valid token)
   let mut token = next_tok(&mut program_chars);
+  
   while let Some(tok) = token {
   
     println!("got token with chars: {}", tok.chars);
