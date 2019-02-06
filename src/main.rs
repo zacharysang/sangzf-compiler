@@ -16,6 +16,9 @@ fn all_tokens() -> Box<Vec<Token>> {
   // TODO put all these into a direct declaration rather than adding them all in
   let mut token_types = Box::new(Vec::new());
   
+  // catch all token type. Goes first so that liveness will be overwritten by other token types
+  token_types.push(tokens::unknown::Unknown::start());
+  
   token_types.push(tokens::period::Period::start());
   token_types.push(tokens::semicolon::Semicolon::start());
   token_types.push(tokens::parens::LParen::start());
@@ -69,47 +72,57 @@ fn all_tokens() -> Box<Vec<Token>> {
   return token_types;
 }
 
-fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
+// TODO support comments
+fn next_tok(program: &mut std::iter::Peekable<std::str::Chars>) -> Option<TokenEntry> {
   
   // make a collection with state for all token types
   let mut token_types = all_tokens();
     
   // information about an acceptable token
-  // (not accepted until last option)
+  // (not accepted until last live token type)
   let mut acceptable_idx = None;
   let mut acceptable_chars = None;
   
-  // the value we will eventually return
+  // the value to eventually return
   let mut next_token = None;
   
-  let mut curr_ch = program.next();
-  while let Some(ch) = curr_ch {
-    if !tokenize::is_ws(ch) {
+  // check for end of file
+  if let None = program.peek() {
+    println!("EOF Reached");
+    return None;
+  }
+  
+  // ensure head of iterator is a non-ws
+  while let Some(ch) = program.peek() {
+    if !tokenize::is_ws(*ch) {
       break;
     }
     
-    curr_ch = program.next();
+    program.next();
   }
   
-  
-  // while at least one token is alive, keep adding characters
-  // if the token is acceptable, save it
+  // while at more than one (disregarding 'unknown') token is alive (tok.state != None), keep consuming characters
+  // if the token is acceptable, record it
   // when none are alive state, return accept token
   // if acceptable == None, error
-  let mut alive = true;
-  while alive {
+  let mut alive = 2;
+  while alive > 1 {
   
-    alive = false;
-    
+    alive = 0;
+      
+    // get value at the head of the iterator
+    let curr_ch = program.peek();
+  
     if let Some(ch) = curr_ch {
     
       for (i, token) in token_types.iter_mut().enumerate() {
       
-        // advance curr type
-        if let Some(state) = token.next(ch) {
-          alive = true;
+        // advance curr type and ensure that it's still a valid state
+        if let Some(state) = token.next(*ch) {
+        
+          alive += 1;
           
-          // check if acceptable
+          // reassign state if acceptable
           if state.accept {
           
             // make a new Token that matches this element
@@ -119,17 +132,20 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
             acceptable_chars = Some(String::from(&state.chars[..]));
           }
         }
-        
       }
     }
     
-    // advance the character iterator unless dead (= about to exit loop)
-    if alive {
-      curr_ch = program.next();
+    // if alive will be true in the next iteration, advance iterator
+    // or if head results in a live state, then consume this char
+    // token 'unknown' if dead and none accepted (alive == 1 && acceptable_idx.is_none())
+    // need to advance if alive or unknown (if unknown and we do not advance, will get stuck on the unknown token)
+    if alive > 1 || acceptable_idx.is_none() {
+      program.next();
     }
     
   }
   
+  // After loop, setup return value
   if let Some(idx) = acceptable_idx {
   
     // print acceptable chars
@@ -140,10 +156,23 @@ fn next_tok(program: &mut std::str::Chars) -> Option<TokenEntry> {
     }
 
   } else {
-    println!("Error! - Could not produce token. Returning None");
+  
+    // TODO is there a less expensive way to do this? (smart pointer or something?)
+    let caught_tok = token_types.drain(..1).next();
+    if let Some(tok) = caught_tok {
+    
+      if let Some(state) = tok.get_state() {
+      
+        let chars = &state.chars;
+        
+        println!("Error, no available token. returning Unknown: '{}'", chars);
+        next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: tok});
+      }
+      
+    }
   }
   
-    return next_token;
+  return next_token;
   
 }
 
@@ -152,18 +181,19 @@ fn main() {
   let mut counter = 0;
   
   // test program
-  let program = String::from("program procedure global variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | := abcdef 1234 898.99 \"stringgoeshere\"  \"fancie$t  string_g0es\n\nhere\t\"");
   
-  let mut program_chars = program.chars();
+  // should have 51 tokens
+  let program = String::from(" program procedure global   ??? variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | := abcdef 1234 898.99 \"stringgoeshere\"  \"fancie$t  string_g0es\n\nhere\t\"");
+  
+  // should have 3 tokens
+  //let program = String::from("abc+bcd");
+  
+  let mut program_chars = program.chars().peekable();
 
-  // TODO change this to read until EOF is reached (instead of until no valid token)
-  let mut token = next_tok(&mut program_chars);
+  while let Some(tok) = next_tok(&mut program_chars) {
   
-  while let Some(tok) = token {
-  
-    println!("got token with chars: {}", tok.chars);
+    println!("got token with chars: '{}' ({})", tok.chars, counter);
 
-    token = next_tok(&mut program_chars);
     counter += 1;
   }
     
