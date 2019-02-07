@@ -23,6 +23,11 @@ impl tokenize::Lexable for LBracket {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }
 
 
@@ -48,4 +53,9 @@ impl tokenize::Lexable for RBracket {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

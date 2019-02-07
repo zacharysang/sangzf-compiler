@@ -24,4 +24,9 @@ impl tokenize::Lexable for EndKW {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

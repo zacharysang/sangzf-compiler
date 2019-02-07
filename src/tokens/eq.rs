@@ -23,4 +23,9 @@ impl tokenize::Lexable for EQ {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

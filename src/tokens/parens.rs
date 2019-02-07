@@ -23,6 +23,11 @@ impl tokenize::Lexable for LParen {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }
 
 
@@ -48,4 +53,9 @@ impl tokenize::Lexable for RParen {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

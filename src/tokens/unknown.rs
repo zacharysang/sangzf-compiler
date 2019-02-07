@@ -16,4 +16,9 @@ impl tokenize::Lexable for Unknown {
       state_val.to(0, ch);
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

@@ -29,4 +29,9 @@ impl tokenize::Lexable for VariableKW {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

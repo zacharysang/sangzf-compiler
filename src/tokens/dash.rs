@@ -22,4 +22,9 @@ impl tokenize::Lexable for Dash {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

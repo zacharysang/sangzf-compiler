@@ -25,4 +25,9 @@ impl tokenize::Lexable for EnumKW {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

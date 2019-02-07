@@ -37,6 +37,8 @@ pub trait Lexable {
   // returns true if the transition exists
   fn next(&mut self, ch: char);
   
+  fn get_state(&self) -> &Option<State>;
+  
 }
 
 pub struct TokenEntry {

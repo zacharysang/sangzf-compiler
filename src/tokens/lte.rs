@@ -23,4 +23,9 @@ impl tokenize::Lexable for LTE {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

@@ -30,4 +30,9 @@ impl tokenize::Lexable for ProcedureKW {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }

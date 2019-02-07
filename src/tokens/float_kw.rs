@@ -26,4 +26,9 @@ impl tokenize::Lexable for FloatKW {
       None => ()
     }
   }
+  
+  fn get_state(&self) -> &Option<tokenize::State> {
+    return &self.state;
+  }
+  
 }
