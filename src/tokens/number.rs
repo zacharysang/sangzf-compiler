@@ -17,9 +17,10 @@ impl tokenize::Lexable for Number {
         match (state_val.label, tokenize::CharGroup::get(ch)) {
           (0, tokenize::CharGroup::Number(ch)) => { state_val.to(1, ch).as_accept(); },
           (1, tokenize::CharGroup::Number(ch)) => { state_val.to(1, ch).as_accept(); },
-          (1, tokenize::CharGroup::Other('.')) => { state_val.to(2, ch); },
-          (2, tokenize::CharGroup::Number(ch)) => { state_val.to(3, ch).as_accept(); },
-          (3, tokenize::CharGroup::Number(ch)) => { state_val.to(3, ch).as_accept(); }
+          (1, tokenize::CharGroup::Other('_')) => { state_val.to(1, ch).as_accept(); },
+          (1, tokenize::CharGroup::Other('.')) => { state_val.to(2, ch).as_accept(); },
+          (2, tokenize::CharGroup::Number(ch)) => { state_val.to(2, ch).as_accept(); },
+          (2, tokenize::CharGroup::Other('_')) => { state_val.to(2, ch).as_accept(); }
           _ => self.state = None
         }
       },
