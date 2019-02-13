@@ -45,4 +45,7 @@ pub mod identifier;
 pub mod number;
 pub mod string;
 
+pub mod line_comment;
+pub mod multiline_comment;
+
 pub mod unknown;

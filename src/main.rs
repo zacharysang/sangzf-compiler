@@ -16,10 +16,10 @@ fn main() {
   // test program
   
   // should have 51 tokens
-  let program = String::from(" program procedure global   ??? variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | := abcdef 1234 898.99 \"stringgoeshere\"  \"fancie$t  string_g0es\n\nhere\t\"");
+  let program = String::from(" program procedure global   ??? variable begin end is type integer float string bool enum if then else for return not true false . ; ( ) , { } - & + < > <= >= == != * / [ ] | := abcdef 1234 898.99 \"stringgoeshere\" \"fancie$t  string_g0es\n\nhere\t\"");
   
   // should have 3 tokens
-  let program = String::from("abc+bcd");
+  //let program = String::from("abc/**this is /*///*a***/*/ doc*/+bcd");
   
   let mut program_chars = program.chars().peekable();
 

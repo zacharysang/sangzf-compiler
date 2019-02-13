@@ -46,7 +46,7 @@ impl Lexer {
     token_types.push(tokens::number::Number::start());
     token_types.push(tokens::string::String::start());
     
-    // These must be last so that they overwrite others
+    // These must be last (except comments) so that they overwrite others
     token_types.push(tokens::program_kw::ProgramKW::start());
     token_types.push(tokens::begin_kw::BeginKW::start());
     token_types.push(tokens::end_kw::EndKW::start());
@@ -69,107 +69,131 @@ impl Lexer {
     token_types.push(tokens::true_kw::TrueKW::start());
     token_types.push(tokens::false_kw::FalseKW::start());
     
+    // comments must go last to overwrite everything else
+    token_types.push(tokens::line_comment::LineComment::start());
+    
+    // this currently breaks. check state machine..
+    token_types.push(tokens::multiline_comment::MultilineComment::start());
+    
     return token_types;
   }
   
-  // TODO support comments
   pub fn next_tok(&mut self, program: &mut std::iter::Peekable<std::str::Chars>) -> Option<TokenEntry> {
-    
-    // make a collection with state for all token types
-    let mut token_types = Lexer::all_tokens();
-      
-    // information about an acceptable token
-    // (not accepted until last live token type)
-    let mut acceptable_idx = None;
-    let mut acceptable_chars = None;
     
     // the value to eventually return
     let mut next_token = None;
+  
+    loop {  
     
-    // check for end of file
-    if let None = program.peek() {
-      println!("EOF Reached");
-      return None;
-    }
-    
-    // ensure head of iterator is a non-ws
-    while let Some(ch) = program.peek() {
-      if !tokenize::is_ws(*ch) {
-        break;
+      let mut is_comment = false;
+      
+      // make a collection with state for all token types
+      let mut token_types = Lexer::all_tokens();
+        
+      // information about an acceptable token
+      // (not accepted until last live token type)
+      let mut acceptable_idx = None;
+      let mut acceptable_chars = None;
+      
+      // check for end of file
+      if let None = program.peek() {
+        println!("EOF Reached");
+        return None;
       }
       
-      program.next();
-    }
-    
-    // while at more than one (disregarding 'unknown') token is alive (tok.state != None), keep consuming characters
-    // if the token is acceptable, record it
-    // when none are alive state, return accept token
-    // if acceptable == None, error
-    let mut alive = 2;
-    while alive > 1 {
-    
-      alive = 0;
-        
-      // get value at the head of the iterator
-      let curr_ch = program.peek();
-    
-      if let Some(ch) = curr_ch {
-      
-        for (i, token) in token_types.iter_mut().enumerate() {
-        
-          // advance curr type and ensure that it's still a valid state
-          if let Some(state) = token.next(*ch) {
-          
-            alive += 1;
-            
-            // reassign state if acceptable
-            if state.accept {
-            
-              // make a new Token that matches this element
-              acceptable_idx = Some(i);
-              
-              // get a copy of the string
-              acceptable_chars = Some(String::from(&state.chars[..]));
-            }
-          }
+      // ensure head of iterator is a non-ws
+      while let Some(ch) = program.peek() {
+        if !tokenize::is_ws(*ch) {
+          break;
         }
-      }
-      
-      // if alive will be true in the next iteration, advance iterator
-      // or if head results in a live state, then consume this char
-      // token 'unknown' if dead and none accepted (alive == 1 && acceptable_idx.is_none())
-      // need to advance if alive or unknown (if unknown and we do not advance, will get stuck on the unknown token)
-      if alive > 1 || acceptable_idx.is_none() {
+        
         program.next();
       }
       
-    }
-    
-    // After loop, setup return value
-    if let Some(idx) = acceptable_idx {
-    
-      // print acceptable chars
-      if let Some(chars) = acceptable_chars {
-        if let Some(tok_type) = token_types.drain(idx..idx+1).next() {
-          next_token = Some(TokenEntry { chars: chars, tok_type: tok_type });
-        }
-      }
-  
-    } else {
-    
-      // TODO is there a less expensive way to do this? (smart pointer or something?)
-      let caught_tok = token_types.drain(..1).next();
-      if let Some(tok) = caught_tok {
+      // while at more than one (disregarding 'unknown') token is alive (tok.state != None), keep consuming characters
+      // if the token is acceptable, record it
+      // when none are alive state, return accept token
+      // if acceptable == None, error
+      let mut alive = 2;
+      while alive > 1 {
       
-        if let Some(state) = tok.get_state() {
-        
-          let chars = &state.chars;
+        alive = 0;
           
-          println!("Error, no available token. returning Unknown: '{}'", chars);
-          next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: tok});
+        // get value at the head of the iterator
+        let curr_ch = program.peek();
+      
+        if let Some(ch) = curr_ch {
+        
+          for (i, token) in token_types.iter_mut().enumerate() {
+          
+            // advance curr type and ensure that it's still a valid state
+            if let Some(state) = token.next(*ch) {
+            
+              alive += 1;
+              
+              // reassign state if acceptable
+              if state.accept {
+              
+                // make a new Token that matches this element
+                acceptable_idx = Some(i);
+                
+                // get a copy of the string
+                acceptable_chars = Some(String::from(&state.chars[..]));
+              }
+            }
+          }
+        }
+        
+        // if alive will be true in the next iteration, advance iterator
+        // or if head results in a live state, then consume this char
+        // token 'unknown' if dead and none accepted (alive == 1 && acceptable_idx.is_none())
+        // need to advance if alive or unknown (if unknown and we do not advance, will get stuck on the unknown token)
+        if alive > 1 || acceptable_idx.is_none() {
+          program.next();
         }
         
       }
+      
+      // After loop, setup return value
+      if let Some(idx) = acceptable_idx {
+      
+        if let Some(chars) = acceptable_chars {
+          if let Some(tok_type) = token_types.drain(idx..idx+1).next() {
+          
+            // check if tok_type is a comment
+            if let Token::LineComment(tok) = &tok_type {
+              is_comment = true;
+            }
+            
+            if let Token::MultilineComment(tok) = &tok_type {
+              is_comment = true;
+            }
+          
+            next_token = Some(TokenEntry { chars: chars, tok_type: tok_type });
+          }
+        }
+    
+      } else {
+      
+        // TODO is there a less expensive way to do extract the selected vector element? (smart pointer or something?)
+        let caught_tok = token_types.drain(..1).next();
+        if let Some(tok) = caught_tok {
+        
+          if let Some(state) = tok.get_state() {
+          
+            let chars = &state.chars;
+            
+            println!("Error, no available token. returning Unknown: '{}'", chars);
+            next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: tok});
+          }
+          
+        }
+      }
+    
+      if !is_comment {
+        break;
+      }
+    
     }
     
     return next_token;

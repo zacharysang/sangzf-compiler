@@ -93,6 +93,8 @@ pub enum Token {
   RBracket(tokens::brackets::RBracket),
   Pipe(tokens::pipe::Pipe),
   Assign(tokens::assign::Assign),
+  LineComment(tokens::line_comment::LineComment),
+  MultilineComment(tokens::multiline_comment::MultilineComment),
   Unknown(tokens::unknown::Unknown)
 }
 
@@ -146,9 +148,11 @@ impl Token {
       Token::String(tok) => { tok.next(ch); return &tok.state; },
       Token::LBracket(tok) => { tok.next(ch); return &tok.state; },
       Token::RBracket(tok) => { tok.next(ch); return &tok.state; },
-      Token::Pipe(tok) => { tok.next(ch); return &tok.state },
-      Token::Assign(tok) => { tok.next(ch); return &tok.state },
-      Token::Unknown(tok) => { tok.next(ch); return &tok.state }
+      Token::Pipe(tok) => { tok.next(ch); return &tok.state; },
+      Token::Assign(tok) => { tok.next(ch); return &tok.state; },
+      Token::LineComment(tok) => { tok.next(ch); return &tok.state; },
+      Token::MultilineComment(tok) => { tok.next(ch); return &tok.state; },
+      Token::Unknown(tok) => { tok.next(ch); return &tok.state; }
     }
   
   }
@@ -202,6 +206,8 @@ impl Token {
       Token::RBracket(tok) => &tok.state,
       Token::Pipe(tok) => &tok.state,
       Token::Assign(tok) => &tok.state,
+      Token::LineComment(tok) => &tok.state,
+      Token::MultilineComment(tok) => &tok.state,
       Token::Unknown(tok) => &tok.state
     }
   }
