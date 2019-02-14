@@ -18,9 +18,9 @@ impl tokenize::Lexable for Identifier {
           (0, tokenize::CharGroup::AlphaLower(ch)) => { state_val.to(1, ch).as_accept(); },
           (0, tokenize::CharGroup::AlphaUpper(ch)) => { state_val.to(1, ch).as_accept(); },
           (1, tokenize::CharGroup::AlphaLower(ch)) => { state_val.to(1, ch).as_accept(); },
-          (1, tokenize::CharGroup::AlphaUpper(ch)) => { state_val.to(2, ch).as_accept(); },
-          (1, tokenize::CharGroup::Number(ch)) => { state_val.to(2, ch).as_accept(); },
-          (1, tokenize::CharGroup::Other('_')) => { state_val.to(2, ch).as_accept(); },
+          (1, tokenize::CharGroup::AlphaUpper(ch)) => { state_val.to(1, ch).as_accept(); },
+          (1, tokenize::CharGroup::Number(ch)) => { state_val.to(1, ch).as_accept(); },
+          (1, tokenize::CharGroup::Other('_')) => { state_val.to(1, ch).as_accept(); },
           _ => self.state = None
         }
       },
