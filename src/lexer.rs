@@ -21,6 +21,7 @@ impl Lexer {
     
     token_types.push(tokens::period::Period::start());
     token_types.push(tokens::semicolon::Semicolon::start());
+    token_types.push(tokens::colon::Colon::start());
     token_types.push(tokens::parens::LParen::start());
     token_types.push(tokens::parens::RParen::start());
     token_types.push(tokens::comma::Comma::start());

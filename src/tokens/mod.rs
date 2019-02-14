@@ -23,6 +23,7 @@ pub mod false_kw; //21
 
 pub mod period;
 pub mod semicolon;
+pub mod colon;
 pub mod parens;
 pub mod comma;
 pub mod braces;
