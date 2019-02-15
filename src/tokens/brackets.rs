@@ -1,15 +1,17 @@
-// bring this into scope so that token-related utilities can be used
-use crate::tokenize;
+use crate::tokenize::state::State;
+use crate::tokenize::lexable::Lexable;
+use crate::tokenize::token::Token;
+
 
 // Code for the left/open paren
 pub struct LBracket {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for LBracket {
+impl Lexable for LBracket {
   
-  fn start() -> tokenize::Token {
-    return tokenize::Token::LBracket( LBracket {state: Some(tokenize::State::new(0))} );
+  fn start() -> Token {
+    return Token::LBracket( LBracket {state: Some(State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
@@ -24,7 +26,7 @@ impl tokenize::Lexable for LBracket {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   
@@ -33,13 +35,13 @@ impl tokenize::Lexable for LBracket {
 
 // Code for the right/close paren
 pub struct RBracket {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for RBracket {
+impl Lexable for RBracket {
   
-  fn start() -> tokenize::Token {
-    return tokenize::Token::RBracket( RBracket {state: Some(tokenize::State::new(0))} );
+  fn start() -> Token {
+    return Token::RBracket( RBracket {state: Some(State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
@@ -54,7 +56,7 @@ impl tokenize::Lexable for RBracket {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   

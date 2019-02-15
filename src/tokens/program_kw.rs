@@ -1,14 +1,16 @@
-// bring tokenize module into scope so we can use token-related utilities
-use crate::tokenize;
+use crate::tokenize::state::State;
+use crate::tokenize::lexable::Lexable;
+use crate::tokenize::token::Token;
+
 
 pub struct ProgramKW {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for ProgramKW {
+impl Lexable for ProgramKW {
 
-  fn start() -> tokenize::Token {
-    return tokenize::Token::ProgramKW(ProgramKW {state: Some(tokenize::State::new(0))});
+  fn start() -> Token {
+    return Token::ProgramKW(ProgramKW {state: Some(State::new(0))});
   }
 
   fn next(&mut self, ch: char) {
@@ -34,7 +36,7 @@ impl tokenize::Lexable for ProgramKW {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   

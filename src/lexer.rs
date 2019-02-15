@@ -1,8 +1,8 @@
 // bring Token into scope so we can use its associated items
-use crate::tokenize;
-use crate::tokenize::Token;
-use crate::tokenize::Lexable;
-use crate::tokenize::TokenEntry;
+use crate::tokenize::lexable::Lexable;
+use crate::tokenize::token::Token;
+use crate::tokenize::token::TokenEntry;
+use crate::tokenize::char_group::CharGroup;
 
 use crate::tokens;
 
@@ -104,7 +104,7 @@ impl Lexer {
       
       // ensure head of iterator is a non-ws
       while let Some(ch) = program.peek() {
-        if !tokenize::is_ws(*ch) {
+        if !CharGroup::is_ws(*ch) {
           break;
         }
         
@@ -162,11 +162,11 @@ impl Lexer {
           if let Some(tok_type) = token_types.drain(idx..idx+1).next() {
           
             // check if tok_type is a comment
-            if let Token::LineComment(tok) = &tok_type {
+            if let Token::LineComment(_tok) = &tok_type {
               is_comment = true;
             }
             
-            if let Token::MultilineComment(tok) = &tok_type {
+            if let Token::MultilineComment(_tok) = &tok_type {
               is_comment = true;
             }
           

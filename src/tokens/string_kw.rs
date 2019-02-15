@@ -1,14 +1,16 @@
-// bring this into scope so that token-related utilities can be used
-use crate::tokenize;
+use crate::tokenize::state::State;
+use crate::tokenize::lexable::Lexable;
+use crate::tokenize::token::Token;
+
 
 pub struct StringKW {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for StringKW {
+impl Lexable for StringKW {
   
-  fn start() -> tokenize::Token {
-    return tokenize::Token::StringKW( StringKW {state: Some(tokenize::State::new(0))} );
+  fn start() -> Token {
+    return Token::StringKW( StringKW {state: Some(State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
@@ -28,7 +30,7 @@ impl tokenize::Lexable for StringKW {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   

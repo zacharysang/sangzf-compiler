@@ -1,15 +1,17 @@
-// bring this into scope so that token-related utilities can be used
-use crate::tokenize;
+use crate::tokenize::state::State;
+use crate::tokenize::lexable::Lexable;
+use crate::tokenize::token::Token;
+
 
 // Code for the left/open paren
 pub struct LParen {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for LParen {
+impl Lexable for LParen {
   
-  fn start() -> tokenize::Token {
-    return tokenize::Token::LParen( LParen {state: Some(tokenize::State::new(0))} );
+  fn start() -> Token {
+    return Token::LParen( LParen {state: Some(State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
@@ -24,7 +26,7 @@ impl tokenize::Lexable for LParen {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   
@@ -33,13 +35,13 @@ impl tokenize::Lexable for LParen {
 
 // Code for the right/close paren
 pub struct RParen {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for RParen {
+impl Lexable for RParen {
   
-  fn start() -> tokenize::Token {
-    return tokenize::Token::RParen( RParen {state: Some(tokenize::State::new(0))} );
+  fn start() -> Token {
+    return Token::RParen( RParen {state: Some(State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
@@ -54,7 +56,7 @@ impl tokenize::Lexable for RParen {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   

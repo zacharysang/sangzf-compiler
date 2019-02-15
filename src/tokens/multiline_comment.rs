@@ -1,22 +1,22 @@
-// bring this into scope so that token-related utilities can be used
-use crate::tokenize;
+use crate::tokenize::state::State;
+use crate::tokenize::lexable::Lexable;
+use crate::tokenize::token::Token;
+
 
 pub struct MultilineComment {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for MultilineComment {
+impl Lexable for MultilineComment {
   
-  fn start() -> tokenize::Token {
-    return tokenize::Token::MultilineComment( MultilineComment {state: Some(tokenize::State::new(0))} );
+  fn start() -> Token {
+    return Token::MultilineComment( MultilineComment {state: Some(State::new(0))} );
   }
 
   fn next(&mut self, ch: char) {
   
     match &mut self.state {
       Some(state_val) => {
-      
-        let original = state_val.label;
       
         // states 2, and {x | (x - 1) % 4 == 0} represent open comment states
         match (state_val.label > 7, state_val.label, (state_val.label + 1) % 3, ch) {
@@ -55,7 +55,7 @@ impl tokenize::Lexable for MultilineComment {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   

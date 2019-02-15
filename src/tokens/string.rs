@@ -1,22 +1,24 @@
-// bring this into scope so that token-related utilities can be used
-use crate::tokenize;
+use crate::tokenize::state::State;
+use crate::tokenize::lexable::Lexable;
+use crate::tokenize::token::Token;
+
 
 pub struct String {
-  pub state: Option<tokenize::State>
+  pub state: Option<State>
 }
 
-impl tokenize::Lexable for String {
+impl Lexable for String {
   
-  fn start() -> tokenize::Token {
-    return tokenize::Token::String( String {state: Some(tokenize::State::new(0))} );
+  fn start() -> Token {
+    return Token::String( String {state: Some(State::new(0))} );
   }
   
   fn next(&mut self, ch: char) {
     match &mut self.state {
       Some(state_val) => {
-        match (state_val.label, tokenize::CharGroup::get(ch)) {
-          (0, tokenize::CharGroup::Other('"')) => { state_val.to(1, ch); },
-          (1, tokenize::CharGroup::Other('"')) => { state_val.to(2, ch).as_accept(); },
+        match (state_val.label, ch) {
+          (0, '"') => { state_val.to(1, ch); },
+          (1, '"') => { state_val.to(2, ch).as_accept(); },
           (1, _) => { state_val.to(1, ch); }
           _ => self.state = None
         }
@@ -25,7 +27,7 @@ impl tokenize::Lexable for String {
     }
   }
   
-  fn get_state(&self) -> &Option<tokenize::State> {
+  fn get_state(&self) -> &Option<State> {
     return &self.state;
   }
   
