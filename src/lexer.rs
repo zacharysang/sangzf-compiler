@@ -10,19 +10,20 @@ use crate::tokenize::char_group::CharGroup;
 use crate::tokens;
 
 pub struct Lexer<'a> {
-  pub program: Peekable<Chars<'a>>
+  pub program: Peekable<Chars<'a>>,
+  pub line_num: u32
 }
 
 impl <'a> Lexer<'a> {
 
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
-    return Lexer {program: program};
+    return Lexer {program: program, line_num: 1};
   }
   
-  fn all_tokens() -> Box<Vec<Token>> {
+  fn all_tokens() -> Vec<Token> {
   
     // TODO put all these into a direct declaration rather than adding them all in
-    let mut token_types = Box::new(Vec::new());
+    let mut token_types = Vec::new();
     
     // catch all token type. Goes first so that liveness will be overwritten by other token types
     token_types.push(tokens::unknown::Unknown::start());
@@ -121,6 +122,10 @@ impl <'a> Iterator for Lexer<'a> {
           break;
         }
         
+        if '\n' == *ch {
+          self.line_num += 1;
+        }
+        
         self.program.next();
       }
       
@@ -163,7 +168,15 @@ impl <'a> Iterator for Lexer<'a> {
         // token 'unknown' if dead and none accepted (alive == 1 && acceptable_idx.is_none())
         // need to advance if alive or unknown (if unknown and we do not advance, will get stuck on the unknown token)
         if alive > 1 || acceptable_idx.is_none() {
-          self.program.next();
+          
+          let curr_ch = self.program.next();
+          
+          if let Some(ch) = curr_ch {
+            if '\n' == ch {
+              self.line_num += 1;
+            }
+          }
+          
         }
         
       }
@@ -172,36 +185,33 @@ impl <'a> Iterator for Lexer<'a> {
       if let Some(idx) = acceptable_idx {
       
         if let Some(chars) = acceptable_chars {
-          if let Some(tok_type) = token_types.drain(idx..idx+1).next() {
-          
-            // check if tok_type is a comment
-            if let Token::LineComment(_tok) = &tok_type {
-              is_comment = true;
-            }
-            
-            if let Token::MultilineComment(_tok) = &tok_type {
-              is_comment = true;
-            }
-          
-            next_token = Some(TokenEntry { chars: chars, tok_type: tok_type });
+        
+          let tok_type = token_types.remove(idx);
+        
+          // check if tok_type is a comment
+          if let Token::LineComment(_tok) = &tok_type {
+            is_comment = true;
           }
+          if let Token::MultilineComment(_tok) = &tok_type {
+            is_comment = true;
+          }
+        
+          next_token = Some(TokenEntry { chars: chars, tok_type: tok_type });
         }
     
       } else {
       
         // TODO is there a less expensive way to do extract the selected vector element? (smart pointer or something?)
-        let caught_tok = token_types.drain(..1).next();
-        if let Some(tok) = caught_tok {
+        let caught_tok = token_types.remove(0);
         
-          if let Some(state) = tok.get_state() {
+        if let Some(state) = caught_tok.get_state() {
+        
+          let chars = &state.chars;
           
-            let chars = &state.chars;
-            
-            println!("Error, no available token. returning Unknown: '{}'", chars);
-            next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: tok});
-          }
-          
+          println!("Error! Unrecognized token, '{}' at line: {}", chars, self.line_num);
+          next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: caught_tok});
         }
+          
       }
     
       if !is_comment {
