@@ -1,3 +1,6 @@
+use std::iter::Peekable;
+use std::str::Chars;
+
 // bring Token into scope so we can use its associated items
 use crate::tokenize::lexable::Lexable;
 use crate::tokenize::token::Token;
@@ -6,11 +9,16 @@ use crate::tokenize::char_group::CharGroup;
 
 use crate::tokens;
 
-pub struct Lexer {}
+pub struct Lexer<'a> {
+  pub program: Peekable<Chars<'a>>
+}
 
+impl <'a> Lexer<'a> {
 
-impl Lexer {
-  // TODO Lexer.rs should read in files
+  pub fn new(program: Peekable<Chars<'a>>) -> Self {
+    return Lexer {program: program};
+  }
+  
   fn all_tokens() -> Box<Vec<Token>> {
   
     // TODO put all these into a direct declaration rather than adding them all in
@@ -79,7 +87,12 @@ impl Lexer {
     return token_types;
   }
   
-  pub fn next_tok(&mut self, program: &mut std::iter::Peekable<std::str::Chars>) -> Option<TokenEntry> {
+}
+
+impl <'a> Iterator for Lexer<'a> {
+  type Item = TokenEntry;
+  
+  fn next(&mut self) -> Option<Self::Item> {
     
     // the value to eventually return
     let mut next_token = None;
@@ -90,25 +103,25 @@ impl Lexer {
       
       // make a collection with state for all token types
       let mut token_types = Lexer::all_tokens();
-        
+
       // information about an acceptable token
       // (not accepted until last live token type)
       let mut acceptable_idx = None;
       let mut acceptable_chars = None;
       
       // check for end of file
-      if let None = program.peek() {
+      if let None = self.program.peek() {
         println!("EOF Reached");
         return None;
       }
       
       // ensure head of iterator is a non-ws
-      while let Some(ch) = program.peek() {
+      while let Some(ch) = self.program.peek() {
         if !CharGroup::is_ws(*ch) {
           break;
         }
         
-        program.next();
+        self.program.next();
       }
       
       // while at more than one (disregarding 'unknown') token is alive (tok.state != None), keep consuming characters
@@ -121,7 +134,7 @@ impl Lexer {
         alive = 0;
           
         // get value at the head of the iterator
-        let curr_ch = program.peek();
+        let curr_ch = self.program.peek();
       
         if let Some(ch) = curr_ch {
         
@@ -150,7 +163,7 @@ impl Lexer {
         // token 'unknown' if dead and none accepted (alive == 1 && acceptable_idx.is_none())
         // need to advance if alive or unknown (if unknown and we do not advance, will get stuck on the unknown token)
         if alive > 1 || acceptable_idx.is_none() {
-          program.next();
+          self.program.next();
         }
         
       }
@@ -198,6 +211,6 @@ impl Lexer {
     }
     
     return next_token;
-    
   }
+  
 }

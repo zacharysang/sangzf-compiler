@@ -13,14 +13,15 @@ mod lexer;
 
 fn main() {
 
-  let mut lexer = lexer::Lexer {};
-
   let mut counter = 0;
 
-  let args : Vec<String> = env::args().collect();
+  // mutable since we will want to remove the program_name arg
+  let mut args : Vec<String> = env::args().collect();
   
-  // take a slice of the input args vector referring to the input program
-  let program_name = &args[1];
+  let mut program_name = String::from("test_programs/correct/source.src");
+  if args.len() == 2 {
+    program_name = args.remove(1);
+  }
   
   // test program
   let mut program_file = File::open(program_name).expect("Could not open file");
@@ -35,10 +36,16 @@ fn main() {
   //let program = String::from("abc/**this is /*///*a***/*/ doc*/+bcd");
   
   let mut program_chars = program.chars().peekable();
+  
+  let mut lexer = lexer::Lexer::new(program_chars);
+  
+  let mut lexer_p = lexer.peekable();
 
-  while let Some(tok) = lexer.next_tok(&mut program_chars) {
+  while let Some(tok) = lexer_p.peek() {
   
     println!("got token with chars: '{}' ({})", tok.chars, counter);
+    
+    lexer_p.next();
 
     counter += 1;
   }
