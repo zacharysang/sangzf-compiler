@@ -201,15 +201,17 @@ impl <'a> Iterator for Lexer<'a> {
     
       } else {
       
-        // TODO is there a less expensive way to do extract the selected vector element? (smart pointer or something?)
         let caught_tok = token_types.remove(0);
         
         if let Some(state) = caught_tok.get_state() {
         
           let chars = &state.chars;
           
-          println!("Error! Unrecognized token, '{}' at line: {}", chars, self.line_num);
-          next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: caught_tok});
+          // only report errors on non-zero tokens
+          if chars.len() > 0 {
+            println!("Error! Unrecognized token, '{}' at line: {}", chars, self.line_num);
+            next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: caught_tok});
+          }
         }
           
       }
