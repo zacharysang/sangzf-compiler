@@ -5,15 +5,12 @@ use std::io::*;
 // expose token utilities (State struct, Token trait)
 mod tokenize;
 
-// expose tokens
 mod tokens;
 
-// expose lexer
 mod lexer;
+mod parser;
 
 fn main() {
-
-  let mut counter = 0;
 
   // mutable since we will want to remove the program_name arg
   let mut args : Vec<String> = env::args().collect();
@@ -35,21 +32,12 @@ fn main() {
   // should have 3 tokens
   //let program = String::from("abc/**this is /*///*a***/*/ doc*/+bcd");
   
-  let mut program_chars = program.chars().peekable();
+  program = String::from("program a is.");
   
-  let mut lexer = lexer::Lexer::new(program_chars);
+  let program_chars = program.chars().peekable();
   
-  let mut lexer_p = lexer.peekable();
-
-  while let Some(tok) = lexer_p.peek() {
+  let mut parser = parser::Parser::new(program_chars);
   
-    println!("got token with chars: '{}' ({})", tok.chars, counter);
-    
-    lexer_p.next();
-
-    counter += 1;
-  }
-    
-  println!("num tokens: {}", counter);
+  parser.program();
   
 }

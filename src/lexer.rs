@@ -11,13 +11,14 @@ use crate::tokens;
 
 pub struct Lexer<'a> {
   pub program: Peekable<Chars<'a>>,
-  pub line_num: u32
+  pub line_num: u32,
+  pub errors: Vec<String>
 }
 
 impl <'a> Lexer<'a> {
 
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
-    return Lexer {program: program, line_num: 1};
+    return Lexer {program: program, line_num: 1, errors: vec![]};
   }
   
   fn all_tokens() -> Vec<Token> {
@@ -209,7 +210,7 @@ impl <'a> Iterator for Lexer<'a> {
           
           // only report errors on non-zero tokens
           if chars.len() > 0 {
-            println!("Error! Unrecognized token, '{}' at line: {}", chars, self.line_num);
+            self.errors.push(format!("Error! Unrecognized token, '{}' at line: {}", chars, self.line_num));
             next_token = Some(TokenEntry {chars: chars.to_string(), tok_type: caught_tok});
           }
         }
