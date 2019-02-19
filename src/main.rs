@@ -32,7 +32,7 @@ fn main() {
   // should have 3 tokens
   //let program = String::from("abc/**this is /*///*a***/*/ doc*/+bcd");
   
-  program = String::from("program a is.");
+  program = String::from("program a IS.");
   
   let program_chars = program.chars().peekable();
   

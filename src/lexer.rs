@@ -142,7 +142,14 @@ impl <'a> Iterator for Lexer<'a> {
         // get value at the head of the iterator
         let curr_ch = self.program.peek();
       
-        if let Some(ch) = curr_ch {
+        // ch is mutable since we reassign if a lowercase variant exists
+        if let Some(mut ch) = curr_ch {
+        
+          // make lowercase
+          let lower_ch = &ch.to_lowercase().next();
+          if let Some(lower) = lower_ch {
+            ch = &lower;
+          }
         
           for (i, token) in token_types.iter_mut().enumerate() {
           
