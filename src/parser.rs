@@ -1,17 +1,20 @@
 use std::iter::Peekable;
 use std::str::Chars;
+use std::collections::HashMap;
 
 use crate::tokenize::lexable::Lexable;
 use crate::lexer::Lexer;
 use crate::tokenize::token::Token;
+use crate::tokenize::token::TokenEntry;
 
 pub struct Parser<'a> {
-  pub lexer: Peekable<Lexer<'a>>
+  pub lexer: Peekable<Lexer<'a>>,
+  pub symbol_table_chain: Vec<HashMap<String, TokenEntry>>
 }
 
 impl <'a>Parser<'a> {
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
-    return Parser {lexer: Lexer::new(program).peekable()};
+    return Parser {lexer: Lexer::new(program).peekable(), symbol_table_chain: vec![]};
   }
   
   /* 
@@ -25,7 +28,7 @@ impl <'a>Parser<'a> {
         // Check for terminating period
         if let Some(tok_entry) = self.lexer.peek() {
           if let Token::Period(_) = &tok_entry.tok_type {
-            // consume
+            // consume period
             self.lexer.next();
             
             // Check that this is the end of the file
@@ -185,6 +188,124 @@ impl <'a>Parser<'a> {
   }
   
   pub fn declaration(&mut self) -> bool {
+  
+    if let Some(tok_entry) = self.lexer.peek() {
+      if let Token::GlobalKW(_) = &tok_entry.tok_type {
+        self.lexer.next();
+        
+        // bring the global symbol table to the surface
+        
+      }
+    }
+    
+    let mut got_declaration = false;
+    if let Some(tok_entry) = self.lexer.peek() {
+      match tok_entry.tok_type {
+        Token::ProcedureKW(_) => { got_declaration = self.procedure_declaration(); },
+        Token::VariableKW(_) => { got_declaration = self.variable_declaration(); },
+        Token::TypeKW(_) => { got_declaration = self.variable_declaration(); },
+        _ => { Self::err_unexpected_tok("(procedure|variable|type)", &tok_entry.chars); }
+      }
+    } else {
+      Self::err_unexpected_end();
+    }
+    
+    if got_declaration {
+      return true;
+    }
+  
+    return false;
+  }
+  
+  pub fn procedure_declaration(&mut self) -> bool {
+    return self.procedure_header() && self.procedure_body();
+  }
+  
+  pub fn procedure_header(&mut self) -> bool {
+  
+    if let Some(tok_entry) = self.lexer.peek() {
+      if let Token::ProcedureKW(_) = &tok_entry.tok_type {
+        self.lexer.next();
+        
+        if let Some(tok_entry) = self.lexer.peek() {
+          if let Token::Identifier(_) = &tok_entry.tok_type {
+            self.lexer.next();
+            
+            if let Some(tok_entry) = self.lexer.peek() {
+              if let Token::Colon(_) = &tok_entry.tok_type {
+                self.lexer.next();
+              
+                if self.type_mark() {
+                
+                  if let Some(tok_entry) = self.lexer.peek() {
+                    if let Token::LParen(_) = &tok_entry.tok_type {
+                    
+                      self.lexer.next();
+                      
+                      // read optional parameter list
+                      self.parameter_list();
+                      
+                      if let Some(tok_entry) = self.lexer.peek() {
+                        if let Token::RParen(_) = &tok_entry.tok_type {
+                          self.lexer.next();
+                        
+                          return true;
+                        } else {
+                          Self::err_unexpected_tok(")", &tok_entry.chars);
+                        }
+                      } else {
+                        Self::err_unexpected_end();
+                      }
+                      
+                    } else {
+                      Self::err_unexpected_tok("(", &tok_entry.chars);
+                    }
+                  } else {
+                    Self::err_unexpected_end();
+                  }
+                  
+                }
+              } else {
+                Self::err_unexpected_tok(":", &tok_entry.chars);
+              }
+            } else {
+              Self::err_unexpected_end();
+            }
+            
+          } else {
+            Self::err_unexpected_tok("<identifier>", &tok_entry.chars);
+          }
+        } else {
+          Self::err_unexpected_end();
+        }
+        
+      } else {
+        Self::err_unexpected_tok("procedure", &tok_entry.chars);
+      }
+    } else {
+      Self::err_unexpected_end();
+    }
+  
+    return true;
+  }
+  
+  pub fn type_mark(&mut self) -> bool {
+    return true;
+  }
+  
+  pub fn parameter_list(&mut self) -> bool {
+    return true;
+  }
+  
+  pub fn procedure_body(&mut self) -> bool {
+    return true;
+  }
+  
+  pub fn variable_declaration(&mut self) -> bool {
+    return true;
+  }
+  
+  pub fn type_declaration(&mut self) -> bool {
     return true;
   }
   
