@@ -1,20 +1,24 @@
 use std::iter::Peekable;
 use std::str::Chars;
 use std::collections::HashMap;
+use std::mem;
 
 use crate::tokenize::lexable::Lexable;
 use crate::lexer::Lexer;
 use crate::tokenize::token::Token;
 use crate::tokenize::token::TokenEntry;
 
+use crate::tokens;
+
 pub struct Parser<'a> {
   pub lexer: Peekable<Lexer<'a>>,
-  pub symbol_table_chain: Vec<HashMap<String, TokenEntry>>
+  pub symbol_table_chain: Vec<HashMap<String, TokenEntry>>,
+  pub errors: Vec<ParserResult>
 }
 
 impl <'a>Parser<'a> {
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
-    return Parser {lexer: Lexer::new(program).peekable(), symbol_table_chain: vec![]};
+    return Parser {lexer: Lexer::new(program).peekable(), symbol_table_chain: vec![], errors: vec![]};
   }
   
   /* 
@@ -22,320 +26,265 @@ impl <'a>Parser<'a> {
     Each function operates on an instance of the parser, processes the parse rule, and returns the success state
   */
   
-  pub fn program(&mut self) -> bool {
-    if self.program_header() {
-      if self.program_body() {
+  pub fn program(&mut self) -> ParserResult {
+    
+    let program_header = self.program_header();
+    if let ParserResult::Success = program_header {
+    
+      let program_body = self.program_body();
+      if let ParserResult::Success = program_body {
+      
         // Check for terminating period
-        if let Some(tok_entry) = self.lexer.peek() {
-          if let Token::Period(_) = &tok_entry.tok_type {
-            // consume period
+        let period = self.parse_tok(tokens::period::Period::start());
+        if let ParserResult::Success = period {
+          
+          // Check that this is the end of the file
+          if let None = self.lexer.peek() {
+            println!("Program parsed successfully.");
             self.lexer.next();
-            
-            // Check that this is the end of the file
-            if let None = self.lexer.peek() {
-              println!("Program parsed successfully.");
-              self.lexer.next();
-              return true;
-            } else if let Some(tok_entry) = self.lexer.peek() {
-              // unexpected token after end of program
-              Self::err_unexpected_tok("<end of program>", &tok_entry.chars);
-            }
-            
-          } else {
-            Self::err_unexpected_tok(".", &tok_entry.chars);
+            return ParserResult::Success;
+          } else if let Some(tok_entry) = self.lexer.peek() {
+            // unexpected token after end of program
+            return ParserResult::ErrUnexpectedTok {expected: String::from("<end of program>"), actual: String::from(&tok_entry.chars[..])};
           }
-        } else {
-          Self::err_unexpected_end();
+          
         }
+        
       }
+      
     }
     
-    return false;
+    return ParserResult::Error;
     
   }
   
-  pub fn program_header(&mut self) -> bool {
+  pub fn program_header(&mut self) -> ParserResult {
     
     // tok_entry is a borrowed value so it will not be able to be moved
-    if let Some(tok_entry) = self.lexer.peek() {
-      if let Token::ProgramKW(_) = &tok_entry.tok_type {
-        self.lexer.next();
-        
-        if let Some(tok_entry) = self.lexer.peek() {
-          if let Token::Identifier(_) = &tok_entry.tok_type {
-            self.lexer.next();
-            
-            if let Some(tok_entry) = self.lexer.peek() {
-              if let Token::IsKW(_) = &tok_entry.tok_type {
-                self.lexer.next();
-                return true;
-              } else {
-                Self::err_unexpected_tok("is", &tok_entry.chars);
-              }
-            } else {
-              Self::err_unexpected_end();
-            }
-            
-          } else {
-            Self::err_unexpected_tok("<identifier>", &tok_entry.chars);
-          }
-        } else {
-          Self::err_unexpected_end();
+    let program_kw = self.parse_tok(tokens::program_kw::ProgramKW::start());
+    if let ParserResult::Success = program_kw {
+    
+      let identifier = self.parse_tok(tokens::identifier::Identifier::start());
+      if let ParserResult::Success = identifier {
+      
+        let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
+        if let ParserResult::Success = is_kw {
+          return ParserResult::Success;
         }
         
-      } else {
-        Self::err_unexpected_tok("program", &tok_entry.chars);
       }
-    } else {
-      Self::err_unexpected_end();
     }
-  
-    return false;
+    
+    return ParserResult::Error;
+    
   }
   
-  pub fn program_body(&mut self) -> bool {
+  pub fn program_body(&mut self) -> ParserResult {
   
     // while next token is in First(declaration), read in a declaration w/ semicolon terminator 
     loop {
       if let Some(tok_entry) = self.lexer.peek() {
 
-        // lookahead to see if we should parse a declaration
-        // ie: if next token is in First(declaration)
-        let mut is_declaration = false;
         match &tok_entry.tok_type {
-          Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => { is_declaration = true; },
+          // these tokens are in First(declaration). Parse the declaration and a terminating semicolon
+          Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => {
+            if let ParserResult::Success = self.declaration() {
+              self.parse_tok(tokens::semicolon::Semicolon::start());
+            }
+          },
           _ => break
         }
-        
-        
-        if is_declaration {
-          // parse a declaration (declarations are optional here so no need to check success status)
-          self.declaration();
-          
-          self.semicolon();
+      }
+    }
+    
+    let begin_kw = self.parse_tok(tokens::begin_kw::BeginKW::start());
+    if let ParserResult::Success = begin_kw {
+      // while next token is in First(statement), read in statement w/ semicolon terminator
+      loop {
+        if let Some(tok_entry) = self.lexer.peek() {
+          match &tok_entry.tok_type {
+            Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
+              // if able to parse a statement, parse a terminating semicolon
+              if let ParserResult::Success = self.statement() {
+                self.parse_tok(tokens::semicolon::Semicolon::start());
+              }
+            },
+            _ => break
+          }
           
         } else {
           break;
         }
-        
-      } else {
-        Self::err_unexpected_end();
-        break;
       }
+      
+      // parse the end kw
+      let end_kw = self.parse_tok(tokens::end_kw::EndKW::start());
+      if let ParserResult::Success = end_kw {
+        let program_kw = self.parse_tok(tokens::program_kw::ProgramKW::start());
+        if let ParserResult::Success = program_kw {
+          return ParserResult::Success;
+        }
+      }
+    }
+  
+    return ParserResult::Error;
+  }
+  
+  pub fn declaration(&mut self) -> ParserResult {
+  
+    if let ParserResult::Success = self.parse_tok(tokens::global_kw::GlobalKW::start()) {
+      // bring the global symbol table to focus
     }
     
     if let Some(tok_entry) = self.lexer.peek() {
-      if let Token::BeginKW(_) = &tok_entry.tok_type {
-        self.lexer.next();
-        
-        // while next token is in First(statement), read in statement w/ semicolon terminator
-        loop {
-          if let Some(tok_entry) = self.lexer.peek() {
-            
-            let mut is_statement = false;
-            match &tok_entry.tok_type {
-              Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => { is_statement = true; },
-              _ => break
-            }
-            
-            if is_statement {
-              self.statement();
+    
+      match &tok_entry.tok_type {
+        Token::ProcedureKW(_tok) => { return self.procedure_declaration(); },
+        Token::VariableKW(_tok) => {return self.variable_declaration(); },
+        Token::TypeKW(_tok) => { return self.type_declaration(); },
+        _ => { return ParserResult::ErrUnexpectedTok {expected: String::from("(procedure|variable|type)"), actual: String::from(&tok_entry.chars[..])}; }
+      }
+      
+    } else {
+      return ParserResult::ErrUnexpectedEnd;
+    }
+  }
+  
+  pub fn procedure_declaration(&mut self) -> ParserResult {
+    let procedure_header = self.procedure_header();
+    if let ParserResult::Success = procedure_header {
+      let procedure_body = self.procedure_body();
+      if let ParserResult::Success = procedure_body {
+        return ParserResult::Success;
+      }
+    }
+    
+    return ParserResult::Error;
+  }
+  
+  pub fn procedure_header(&mut self) -> ParserResult {
+    let procedure_kw = self.parse_tok(tokens::procedure_kw::ProcedureKW::start());
+    if let ParserResult::Success = procedure_kw {
+    
+      let identifier = self.parse_tok(tokens::identifier::Identifier::start());
+      if let ParserResult::Success = identifier {
+        let colon = self.parse_tok(tokens::colon::Colon::start());
+        if let ParserResult::Success = colon {
+          let type_mark = self.type_mark();
+          if let ParserResult::Success = type_mark {
+            let l_paren = self.parse_tok(tokens::parens::LParen::start());
+            if let ParserResult::Success = l_paren {
+              // read optional parameter list
+              self.parameter_list();
               
-              self.semicolon();
-              
-            } else {
-              break;
-            }
-            
-          } else {
-            Self::err_unexpected_end();
-            break;
-          }
-        }
-        
-        // parse the end kw
-        if let Some(tok_entry) = self.lexer.peek() {
-          if let Token::EndKW(_) = &tok_entry.tok_type {
-            self.lexer.next();
-            
-            if let Some(tok_entry) = self.lexer.peek() {
-              if let Token::ProgramKW(_) = &tok_entry.tok_type {
-                self.lexer.next();
-                
-                return true;
-              } else {
-                Self::err_unexpected_tok("program", &tok_entry.chars);
+              let r_paren = self.parse_tok(tokens::parens::RParen::start());
+              if let ParserResult::Success = r_paren {
+                return ParserResult::Success;
               }
-            } else {
-              Self::err_unexpected_end();
             }
-            
-          } else {
-            Self::err_unexpected_tok("end", &tok_entry.chars);
           }
-        } else {
-          Self::err_unexpected_end();
         }
-        
-      } else {
-        Self::err_unexpected_tok("begin", &tok_entry.chars);
-      }
-    } else {
-      Self::err_unexpected_end();
-    }
-  
-    return false;
-  }
-  
-  pub fn declaration(&mut self) -> bool {
-  
-    if let Some(tok_entry) = self.lexer.peek() {
-      if let Token::GlobalKW(_) = &tok_entry.tok_type {
-        self.lexer.next();
-        
-        // bring the global symbol table to the surface
-        
       }
     }
-    
-    let mut got_declaration = false;
-    if let Some(tok_entry) = self.lexer.peek() {
-      match tok_entry.tok_type {
-        Token::ProcedureKW(_) => { got_declaration = self.procedure_declaration(); },
-        Token::VariableKW(_) => { got_declaration = self.variable_declaration(); },
-        Token::TypeKW(_) => { got_declaration = self.variable_declaration(); },
-        _ => { Self::err_unexpected_tok("(procedure|variable|type)", &tok_entry.chars); }
-      }
-    } else {
-      Self::err_unexpected_end();
-    }
-    
-    if got_declaration {
-      return true;
-    }
   
-    return false;
+    return ParserResult::Error;
   }
   
-  pub fn procedure_declaration(&mut self) -> bool {
-    return self.procedure_header() && self.procedure_body();
-  }
+  pub fn type_mark(&mut self) -> ParserResult {
   
-  pub fn procedure_header(&mut self) -> bool {
+    return ParserResult::Success;
   
-    if let Some(tok_entry) = self.lexer.peek() {
-      if let Token::ProcedureKW(_) = &tok_entry.tok_type {
-        self.lexer.next();
-        
-        if let Some(tok_entry) = self.lexer.peek() {
-          if let Token::Identifier(_) = &tok_entry.tok_type {
-            self.lexer.next();
+    let mut type_mark = ParserResult::Error;
+    let peek_tok = self.lexer.peek();
+    if let Some(tok_entry) = peek_tok {
+      match &tok_entry.tok_type {
+        Token::IntegerKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
+        Token::FloatKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
+        Token::StringKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
+        Token::BoolKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
+        Token::Identifier(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
+        Token::EnumKW(_) => {
+          self.lexer.next();
+          
+          let l_brace = self.parse_tok(tokens::braces::LBrace::start());
+          if let ParserResult::Success = l_brace {
+            let identifier = self.parse_tok(tokens::identifier::Identifier::start());
+            if let ParserResult::Success = identifier {
             
-            if let Some(tok_entry) = self.lexer.peek() {
-              if let Token::Colon(_) = &tok_entry.tok_type {
-                self.lexer.next();
-              
-                if self.type_mark() {
-                
-                  if let Some(tok_entry) = self.lexer.peek() {
-                    if let Token::LParen(_) = &tok_entry.tok_type {
-                    
-                      self.lexer.next();
-                      
-                      // read optional parameter list
-                      self.parameter_list();
-                      
-                      if let Some(tok_entry) = self.lexer.peek() {
-                        if let Token::RParen(_) = &tok_entry.tok_type {
-                          self.lexer.next();
-                        
-                          return true;
-                        } else {
-                          Self::err_unexpected_tok(")", &tok_entry.chars);
-                        }
-                      } else {
-                        Self::err_unexpected_end();
-                      }
-                      
-                    } else {
-                      Self::err_unexpected_tok("(", &tok_entry.chars);
-                    }
-                  } else {
-                    Self::err_unexpected_end();
-                  }
-                  
+              loop {
+                // optionally parse additional identifiers (delimited by comma)
+                if let ParserResult::Success = self.parse_tok(tokens::comma::Comma::start()) {
+                  self.parse_tok(tokens::identifier::Identifier::start());
+                } else {
+                  break;
                 }
-              } else {
-                Self::err_unexpected_tok(":", &tok_entry.chars);
               }
-            } else {
-              Self::err_unexpected_end();
+              
+              let r_brace = self.parse_tok(tokens::braces::RBrace::start());
+              if let ParserResult::Success = r_brace {
+                type_mark = ParserResult::Success;
+              }
             }
-            
-          } else {
-            Self::err_unexpected_tok("<identifier>", &tok_entry.chars);
           }
-        } else {
-          Self::err_unexpected_end();
-        }
-        
-      } else {
-        Self::err_unexpected_tok("procedure", &tok_entry.chars);
+          
+        },
+        _ => { type_mark = ParserResult::ErrUnexpectedTok{expected: String::from("<some_type_kw>"), actual: String::from(&tok_entry.chars[..])}; }
       }
-    } else {
-      Self::err_unexpected_end();
     }
   
-    return true;
+    return type_mark;
   }
   
-  pub fn type_mark(&mut self) -> bool {
-    return true;
+  pub fn parameter_list(&mut self) -> ParserResult {
+    return ParserResult::Success;
   }
   
-  pub fn parameter_list(&mut self) -> bool {
-    return true;
+  pub fn procedure_body(&mut self) -> ParserResult {
+    return ParserResult::Success;
   }
   
-  pub fn procedure_body(&mut self) -> bool {
-    return true;
+  pub fn variable_declaration(&mut self) -> ParserResult {
+    return ParserResult::Success;
   }
   
-  pub fn variable_declaration(&mut self) -> bool {
-    return true;
+  pub fn type_declaration(&mut self) -> ParserResult {
+    return ParserResult::Success;
   }
   
-  pub fn type_declaration(&mut self) -> bool {
-    return true;
+  pub fn statement(&mut self) -> ParserResult {
+    return ParserResult::Success;
   }
   
-  pub fn statement(&mut self) -> bool {
-    return true;
-  }
-  
-  pub fn semicolon(&mut self) -> bool {
+  // TODO get this to use generics so that a dummy target token doesn't need to be passed in
+  pub fn parse_tok(&mut self, target: Token) -> ParserResult {
     if let Some(tok_entry) = self.lexer.peek() {
-      if let Token::Semicolon(_) = &tok_entry.tok_type {
+      if mem::discriminant(&tok_entry.tok_type) == mem::discriminant(&target) {
         self.lexer.next();
-        
-        return true;
+      
+        return ParserResult::Success;
       } else {
-        Self::err_unexpected_tok(";", &tok_entry.chars);
+        return ParserResult::ErrUnexpectedTok {expected: String::from("<terminal token>"), actual: String::from(&tok_entry.chars[..])};
       }
     } else {
-      Self::err_unexpected_end();
+      return ParserResult::ErrUnexpectedEnd
     }
-    
-    return false;
   }
-  
-  pub fn err_unexpected_tok(expected: &str, actual: &str) {
-    println!("Unexpected token - Expected: '{}', got: '{}'", expected, actual);
-  }
-  
-  pub fn err_unexpected_end() {
-    println!("Unexpected end of program.");
-  }
-  
 }
 
+pub enum ParserResult {
+  ErrUnexpectedEnd,
+  ErrUnexpectedTok{ expected: String, actual: String },
+  Success,
+  Error
+}
+
+impl ParserResult {
+  pub fn print(&mut self) {
+    match self {
+      ParserResult::ErrUnexpectedEnd => { println!("Unexpected end of program."); },
+      ParserResult::ErrUnexpectedTok{ expected, actual } => { println!("Unexpected token - Expected: '{}', got: '{}'", expected, actual); },
+      ParserResult::Success => { println!("Success"); },
+      ParserResult::Error => { println!("Unknown error"); }
+    }
+  }
+}
