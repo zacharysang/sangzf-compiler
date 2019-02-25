@@ -194,6 +194,7 @@ impl <'a>Parser<'a> {
           if let ParserResult::Success = type_mark {
             let l_paren = self.parse_tok(tokens::parens::LParen::start());
             if let ParserResult::Success = l_paren {
+            
               // read optional parameter list
               self.parameter_list();
               
@@ -274,6 +275,27 @@ impl <'a>Parser<'a> {
   }
   
   pub fn parameter_list(&mut self) -> ParserResult {
+    
+    let parameter = self.parameter();
+    if let ParserResult::Success = parameter {
+      
+      // optionally parse another parameter list (delimited by comma)
+      let comma = self.parse_tok(tokens::comma::Comma::start());
+      if let ParserResult::Success = comma {
+        // call recursively to parse the rest of the list
+        return self.parameter_list();
+      } else {
+        return ParserResult::Success;
+      }
+      
+    } else {
+      parameter.print();
+      return parameter;
+    }
+    
+  }
+  
+  pub fn parameter(&mut self) -> ParserResult {
     return ParserResult::Success;
   }
   
@@ -301,7 +323,7 @@ impl <'a>Parser<'a> {
       
         return ParserResult::Success;
       } else {
-        return ParserResult::ErrUnexpectedTok {expected: String::from("<terminal token>"), actual: String::from(&tok_entry.chars[..])};
+        return ParserResult::ErrUnexpectedTok {expected: String::from(target.get_example()), actual: String::from(&tok_entry.chars[..])};
       }
     } else {
       return ParserResult::ErrUnexpectedEnd

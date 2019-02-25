@@ -176,4 +176,60 @@ impl Token {
       Token::Unknown(tok) => &tok.state
     }
   }
+  
+  pub fn get_example(&self) -> &'static str {
+    match self {
+      Token::ProgramKW(_) => "program",
+      Token::BeginKW(_) => "begin",
+      Token::EndKW(_) => "end",
+      Token::Period(_) => ".",
+      Token::Semicolon(_) => ";",
+      Token::Colon(_) => ":",
+      Token::IsKW(_) => "is",
+      Token::GlobalKW(_) => "global",
+      Token::ProcedureKW(_) => "procedure",
+      Token::LParen(_) => "(",
+      Token::RParen(_) => ")",
+      Token::Comma(_) => ",",
+      Token::VariableKW(_) => "variable",
+      Token::TypeKW(_) => "type",
+      Token::LBrace(_) => "{",
+      Token::RBrace(_) => "}",
+      Token::IntegerKW(_) => "integer",
+      Token::FloatKW(_) => "float",
+      Token::StringKW(_) => "string",
+      Token::BoolKW(_) => "bool",
+      Token::EnumKW(_) => "enum",
+      Token::Dash(_) => "-",
+      Token::IfKW(_) => "if",
+      Token::ThenKW(_) => "then",
+      Token::ElseKW(_) => "else",
+      Token::ForKW(_) => "for",
+      Token::ReturnKW(_) => "return",
+      Token::NotKW(_) => "not",
+      Token::Ampersand(_) => "&",
+      Token::Plus(_) => "+",
+      Token::TrueKW(_) => "true",
+      Token::FalseKW(_) => "false",
+      Token::LT(_) => "<",
+      Token::GT(_) => ">",
+      Token::LTE(_) => "<=",
+      Token::GTE(_) => ">=",
+      Token::EQ(_) => "==",
+      Token::NEQ(_) => "!=",
+      Token::Asterisk(_) => "*",
+      Token::Slash(_) => "/",
+      Token::Identifier(_) => "<identifier>",
+      Token::Number(_) => "<number>",
+      Token::String(_) => "<string>",
+      Token::LBracket(_) => "[",
+      Token::RBracket(_) => "]",
+      Token::Pipe(_) => "|",
+      Token::Assign(_) => ":=",
+      Token::LineComment(_) => "<line_comment>",
+      Token::MultilineComment(_) => "<multiline_comment>",
+      Token::Unknown(_) => "<other>"
+    }
+  }
+  
 }
