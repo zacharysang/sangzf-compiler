@@ -48,10 +48,16 @@ impl <'a>Parser<'a> {
             return ParserResult::ErrUnexpectedTok {expected: String::from("<end of program>"), actual: String::from(&tok_entry.chars[..])};
           }
           
+        } else {
+          period.print();
         }
         
+      } else {
+        program_body.print();
       }
       
+    } else {
+      program_header.print();
     }
     
     return ParserResult::Error;
@@ -70,9 +76,15 @@ impl <'a>Parser<'a> {
         let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
         if let ParserResult::Success = is_kw {
           return ParserResult::Success;
+        } else {
+          is_kw.print();
         }
         
+      } else {
+        identifier.print();
       }
+    } else {
+      program_kw.print();
     }
     
     return ParserResult::Error;
@@ -124,7 +136,11 @@ impl <'a>Parser<'a> {
         if let ParserResult::Success = program_kw {
           return ParserResult::Success;
         }
+      } else {
+        end_kw.print();
       }
+    } else {
+      begin_kw.print();
     }
   
     return ParserResult::Error;
@@ -156,7 +172,11 @@ impl <'a>Parser<'a> {
       let procedure_body = self.procedure_body();
       if let ParserResult::Success = procedure_body {
         return ParserResult::Success;
+      } else {
+        procedure_body.print();
       }
+    } else {
+      procedure_header.print();
     }
     
     return ParserResult::Error;
@@ -180,11 +200,23 @@ impl <'a>Parser<'a> {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
               if let ParserResult::Success = r_paren {
                 return ParserResult::Success;
+              } else {
+                r_paren.print();
               }
+            } else {
+              l_paren.print();
             }
+          } else {
+             type_mark.print();
           }
+        } else {
+          colon.print();
         }
+      } else {
+        identifier.print();
       }
+    } else {
+      procedure_kw.print();
     }
   
     return ParserResult::Error;
@@ -192,17 +224,14 @@ impl <'a>Parser<'a> {
   
   pub fn type_mark(&mut self) -> ParserResult {
   
-    return ParserResult::Success;
-  
-    let mut type_mark = ParserResult::Error;
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = peek_tok {
       match &tok_entry.tok_type {
-        Token::IntegerKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
-        Token::FloatKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
-        Token::StringKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
-        Token::BoolKW(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
-        Token::Identifier(_) => { self.lexer.next(); type_mark = ParserResult::Success; },
+        Token::IntegerKW(_) => { self.lexer.next(); return ParserResult::Success; },
+        Token::FloatKW(_) => { self.lexer.next(); return ParserResult::Success; },
+        Token::StringKW(_) => { self.lexer.next(); return ParserResult::Success; },
+        Token::BoolKW(_) => { self.lexer.next(); return ParserResult::Success; },
+        Token::Identifier(_) => { self.lexer.next(); return ParserResult::Success; },
         Token::EnumKW(_) => {
           self.lexer.next();
           
@@ -222,17 +251,26 @@ impl <'a>Parser<'a> {
               
               let r_brace = self.parse_tok(tokens::braces::RBrace::start());
               if let ParserResult::Success = r_brace {
-                type_mark = ParserResult::Success;
+                return ParserResult::Success;
+              } else {
+                r_brace.print();
+                return r_brace;
               }
+            } else {
+              identifier.print();
+              return identifier;
             }
+          } else {
+            l_brace.print();
+            return l_brace;
           }
           
         },
-        _ => { type_mark = ParserResult::ErrUnexpectedTok{expected: String::from("<some_type_kw>"), actual: String::from(&tok_entry.chars[..])}; }
+        _ => { return ParserResult::ErrUnexpectedTok{expected: String::from("<some_type_kw>"), actual: String::from(&tok_entry.chars[..])}; }
       }
+    } else {
+      return ParserResult::ErrUnexpectedEnd;
     }
-  
-    return type_mark;
   }
   
   pub fn parameter_list(&mut self) -> ParserResult {
@@ -279,7 +317,7 @@ pub enum ParserResult {
 }
 
 impl ParserResult {
-  pub fn print(&mut self) {
+  pub fn print(&self) {
     match self {
       ParserResult::ErrUnexpectedEnd => { println!("Unexpected end of program."); },
       ParserResult::ErrUnexpectedTok{ expected, actual } => { println!("Unexpected token - Expected: '{}', got: '{}'", expected, actual); },
