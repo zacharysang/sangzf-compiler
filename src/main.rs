@@ -32,7 +32,7 @@ fn main() {
   // should have 3 tokens
   //let program = String::from("abc/**this is /*///*a***/*/ doc*/+bcd");
   
-  program = String::from("program p Is procedure proc : enum{a,b,c}(,,);  begin end program.");
+  program = String::from("program p Is procedure proc : enum{a,b,c}(variable a : integer, variable b: bool, variable c: string, variable d: float) begin end procedure;  begin end program.");
   
   let program_chars = program.chars().peekable();
   
