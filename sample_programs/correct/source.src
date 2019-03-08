@@ -1,13 +1,13 @@
 Program MyTestProgram is
 
-integer i;
-char c;
-integer myArray[7:15];
+variable i : integer;
+variable c : string;
+variable myArray : integer[15];
 
 begin
 
 i := 100;
-c := 'A';
+c := "A";
 
 if(i > 100) then
 //do something#

@@ -60,7 +60,6 @@ impl <'a>Parser<'a> {
   }
   
   pub fn program_header(&mut self) -> ParserResult {
-    
     // tok_entry is a borrowed value so it will not be able to be moved
     let program_kw = self.parse_tok(tokens::program_kw::ProgramKW::start());
     if let ParserResult::Success = program_kw {
@@ -83,7 +82,6 @@ impl <'a>Parser<'a> {
   }
   
   pub fn program_body(&mut self) -> ParserResult {
-  
     // while next token is in First(declaration), read in a declaration w/ semicolon terminator 
     loop {
       if let Some(tok_entry) = self.lexer.peek() {
@@ -136,7 +134,6 @@ impl <'a>Parser<'a> {
   }
   
   pub fn declaration(&mut self) -> ParserResult {
-  
     if let ParserResult::Success = self.parse_tok(tokens::global_kw::GlobalKW::start()) {
       // bring the global symbol table to focus
     }
@@ -407,14 +404,7 @@ impl <'a>Parser<'a> {
       if let ParserResult::Success = l_paren {
         
         // parse optional argument list
-        let peek_tok = self.lexer.peek();
-        if let Some(tok_entry) = peek_tok {
-          /*
-          if let Token:: = &tok_entry.tok_type {
-            self.argument_list();
-          }
-          */
-        }
+        self.argument_list();
         
         let r_paren = self.parse_tok(tokens::parens::RParen::start());
         if let ParserResult::Success = r_paren {
@@ -424,6 +414,7 @@ impl <'a>Parser<'a> {
     } else { return identifier; }
   }
   
+  // this is currently unused since procedure calls currently only occur ambiguously with names (in the factor parse rule)
   pub fn procedure_call(&mut self) -> ParserResult {
   
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
@@ -439,6 +430,9 @@ impl <'a>Parser<'a> {
       if let Some(tok_entry) = peek_tok {
         // if next up is an LBracket, commit to parsing this optional portion
         if let Token::LBracket(_) = &tok_entry.tok_type {
+          // consume the l_bracket
+          self.lexer.next();
+          
           let expression = self.expression();
           if let ParserResult::Success = expression {
             let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
@@ -466,7 +460,7 @@ impl <'a>Parser<'a> {
   pub fn term(&mut self) -> ParserResult {
   
     // define function for factored parse rule
-    fn _term<'a>(mut slf: &mut Parser<'a>) -> ParserResult {
+    fn _term<'a>(slf: &mut Parser<'a>) -> ParserResult {
       // accept either a '*' or '/'
       let asterisk = slf.parse_tok(tokens::asterisk::Asterisk::start());
       if let ParserResult::Success = asterisk {
@@ -502,7 +496,7 @@ impl <'a>Parser<'a> {
   }
   
   pub fn relation(&mut self) -> ParserResult {
-    fn _relation<'a>(mut slf: &mut Parser<'a>) -> ParserResult {
+    fn _relation<'a>(slf: &mut Parser<'a>) -> ParserResult {
       let peek_tok = slf.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         match &tok_entry.tok_type {
@@ -517,6 +511,19 @@ impl <'a>Parser<'a> {
               }
             } else {
               return lt;
+            }
+          },
+          Token::GTE(_) => {
+            let gte = slf.parse_tok(tokens::gte::GTE::start());
+            if let ParserResult::Success = gte {
+              let term = slf.term();
+              if let ParserResult::Success = term {
+                return _relation(slf);
+              } else {
+                return term;
+              }
+            } else {
+              return gte;
             }
           },
           Token::LTE(_) => {
@@ -545,19 +552,24 @@ impl <'a>Parser<'a> {
               return gt;
             }
           },
-          Token::GTE(_) => {
-            let gte = slf.parse_tok(tokens::gte::GTE::start());
-            if let ParserResult::Success = gte {
+          Token::EQ(_) => {
+            let eq = slf.parse_tok(tokens::eq::EQ::start());
+            if let ParserResult::Success = eq {
               let term = slf.term();
               if let ParserResult::Success = term {
                 return _relation(slf);
-              } else {
-                return term;
-              }
-            } else {
-              return gte;
-            }
+              } else { return term; }
+            } else { return eq; }
           },
+          Token::NEQ(_) => {
+            let neq = slf.parse_tok(tokens::neq::NEQ::start());
+            if let ParserResult::Success = neq {
+              let term = slf.term();
+              if let ParserResult::Success = term {
+                return _relation(slf);
+              } else { return term; }
+            } else { return neq; }
+          }
           _ => { 
             // allow nothing to be parsed (allow lambda production)
             // this is the base case for this recursive function
@@ -581,7 +593,7 @@ impl <'a>Parser<'a> {
   }
   
   pub fn arith_op(&mut self) -> ParserResult {
-    fn _arith_op(mut slf: &mut Parser) -> ParserResult {
+    fn _arith_op(slf: &mut Parser) -> ParserResult {
       let peek_tok = slf.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         match &tok_entry.tok_type {
@@ -630,7 +642,7 @@ impl <'a>Parser<'a> {
   }
   
   pub fn expression(&mut self) -> ParserResult {
-    fn _expression(mut slf: &mut Parser) -> ParserResult {
+    fn _expression(slf: &mut Parser) -> ParserResult {
       let peek_tok = slf.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         match &tok_entry.tok_type {
@@ -849,7 +861,10 @@ impl <'a>Parser<'a> {
   }
   
   pub fn name_or_number(&mut self) -> ParserResult {
-    let dash = self.parse_tok(tokens::dash::Dash::start());
+    
+    // optionally parse a dash
+    // TODO capture the value so it can be used when writing to the symbol table
+    self.parse_tok(tokens::dash::Dash::start());
     
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = &peek_tok {
@@ -905,6 +920,7 @@ impl <'a>Parser<'a> {
   }
 }
 
+// TODO add chaining behavior so that we can chain parse rules until a failure is reached. This would really simplify this code by flattening all these nested ifs
 pub enum ParserResult {
   ErrUnexpectedEnd,
   ErrUnexpectedTok{ expected: String, actual: String },
