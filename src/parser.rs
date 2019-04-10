@@ -18,7 +18,8 @@ pub struct Parser<'a> {
 
 impl <'a>Parser<'a> {
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
-    return Parser {lexer: Lexer::new(program).peekable(), symbol_table_chain: vec![], errors: vec![]};
+    let lexer = Lexer::new(program);
+    return Parser {lexer: lexer.peekable(), symbol_table_chain: vec![], errors: vec![]};
   }
   
   
@@ -43,12 +44,16 @@ impl <'a>Parser<'a> {
           
           // Check that this is the end of the file
           if let None = self.lexer.peek() {
-            println!("Program parsed successfully.");
+            println!("Program parsed.");
             self.lexer.next();
             return ParserResult::Success;
           } else if let Some(tok_entry) = self.lexer.peek() {
             // unexpected token after end of program
-            return ParserResult::ErrUnexpectedTok {expected: String::from("<end of program>"), actual: String::from(&tok_entry.chars[..])};
+            let result = ParserResult::ErrUnexpectedTok {expected: String::from("<end of program>"), actual: String::from(&tok_entry.chars[..])};
+            
+            result.print();
+            
+            return result;
           }
           
         } else { period.print(); }
@@ -89,9 +94,12 @@ impl <'a>Parser<'a> {
         match &tok_entry.tok_type {
           // these tokens are in First(declaration). Parse the declaration and a terminating semicolon
           Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => {
-            self.declaration();
+            let declaration = self.declaration();
+            if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = &declaration {
+              declaration.print();
+            }
             
-            self.parse_tok(tokens::semicolon::Semicolon::start());
+            self.resync();
           },
           _ => break
         }
@@ -108,9 +116,12 @@ impl <'a>Parser<'a> {
           match &tok_entry.tok_type {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
               // if able to parse a statement, parse a terminating semicolon
-              if let ParserResult::Success = self.statement() {
-                self.parse_tok(tokens::semicolon::Semicolon::start());
+              let statement = self.statement();
+              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                statement.print();
               }
+              
+              self.resync();
             },
             _ => break
           }
@@ -282,9 +293,12 @@ impl <'a>Parser<'a> {
         match &tok_entry.tok_type {
           // these tokens are in First(declaration). Parse the declaration and a terminating semicolon
           Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => {
-            self.declaration();
+            let declaration = self.declaration();
+            if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = declaration {
+              declaration.print();
+            }
             
-            self.parse_tok(tokens::semicolon::Semicolon::start());
+            self.resync();
           },
           _ => break
         }
@@ -301,9 +315,12 @@ impl <'a>Parser<'a> {
         if let Some(tok_entry) = self.lexer.peek() {
           match &tok_entry.tok_type {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
-              self.statement();
+              let statement = self.statement();
+              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                statement.print();
+              }
               
-              self.parse_tok(tokens::semicolon::Semicolon::start());
+              self.resync();
             },
             _ => break
           }
@@ -751,13 +768,17 @@ impl <'a>Parser<'a> {
               
               // parse an arbitrary number of statements delimited by ';'
               loop {
-                let statement = self.statement();
-                if let ParserResult::Success = statement {
-                  let semicolon = self.parse_tok(tokens::semicolon::Semicolon::start());
-                  if let ParserResult::Success = semicolon {
-                    continue;
-                  } else {
-                    return semicolon;
+                if let Some(tok_entry) = self.lexer.peek() {
+                  match tok_entry.tok_type {
+                    Token::ElseKW(_) | Token::EndKW(_) => break,
+                    _ => {
+                      let statement = self.statement();
+                      if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                        statement.print();
+                      } 
+                      
+                      self.resync();
+                    }
                   }
                 } else {
                   break;
@@ -769,13 +790,17 @@ impl <'a>Parser<'a> {
               if let ParserResult::Success = else_kw {
                 // parse an arbitrary number of statements delimited by ';'
                 loop {
-                  let statement = self.statement();
-                  if let ParserResult::Success = statement {
-                    let semicolon = self.parse_tok(tokens::semicolon::Semicolon::start());
-                    if let ParserResult::Success = semicolon {
-                      continue;
-                    } else {
-                      return semicolon;
+                  if let Some(tok_entry) = self.lexer.peek() {
+                    match tok_entry.tok_type {
+                      Token::EndKW(_) => break,
+                      _ => {
+                        let statement = self.statement();
+                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                          statement.print();
+                        } 
+                        
+                        self.resync();
+                      }
                     }
                   } else {
                     break;
@@ -789,7 +814,6 @@ impl <'a>Parser<'a> {
               } else { 
                 return end_kw;
               }
-              
             } else { return then_kw; }
           } else { return r_paren; }
         } else { return expression; }
@@ -813,13 +837,16 @@ impl <'a>Parser<'a> {
                 
                 // parse an arbitrary number of statements delimited by ';'
                 loop {
-                  let statement = self.statement();
-                  if let ParserResult::Success = statement {
-                    let semicolon = self.parse_tok(tokens::semicolon::Semicolon::start());
-                    if let ParserResult::Success = semicolon {
-                      continue;
-                    } else {
-                      return semicolon;
+                  if let Some(tok_entry) = self.lexer.peek() {
+                    match tok_entry.tok_type {
+                      Token::EndKW(_) => break,
+                      _ => {
+                        let statement = self.statement();
+                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                          statement.print();
+                        }
+                        self.resync();
+                      }
                     }
                   } else {
                     break;
@@ -918,6 +945,26 @@ impl <'a>Parser<'a> {
       } else { return ParserResult::ErrUnexpectedTok {expected: String::from(target.get_example()), actual: String::from(&tok_entry.chars[..])}; }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
+  
+  // consume tokens until a semicolon is hit, and then consume the semicolon
+  pub fn resync(&mut self) {
+    loop {
+      let result = self.parse_tok(tokens::semicolon::Semicolon::start());
+      
+      match result {
+        ParserResult::Success => break,
+        ParserResult::ErrUnexpectedEnd => {
+          result.print();
+          break;
+        },
+        _ => {
+          result.print();
+          self.lexer.next();
+        }
+      }
+    }
+  }
+  
 }
 
 // TODO add chaining behavior so that we can chain parse rules until a failure is reached. This would really simplify this code by flattening all these nested ifs
@@ -933,8 +980,8 @@ impl ParserResult {
     match self {
       ParserResult::ErrUnexpectedEnd => { println!("Unexpected end of program."); },
       ParserResult::ErrUnexpectedTok{ expected, actual } => { println!("Unexpected token - Expected: '{}', got: '{}'", expected, actual); },
-      ParserResult::Success => { println!("Success"); },
-      ParserResult::Error => { println!("Unknown error"); }
+      ParserResult::Error => { println!("Unknown error"); },
+      ParserResult::Success => { println!("Success"); }
     }
   }
 }
