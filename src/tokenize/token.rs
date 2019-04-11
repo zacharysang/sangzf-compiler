@@ -5,7 +5,8 @@ use crate::tokens;
 
 pub struct TokenEntry {
   pub chars: String,
-  pub tok_type: Token
+  pub tok_type: Token,
+  pub line_num: u32
 }
 
 pub enum Token {

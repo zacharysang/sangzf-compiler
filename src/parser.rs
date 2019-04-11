@@ -19,6 +19,7 @@ pub struct Parser<'a> {
 impl <'a>Parser<'a> {
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
     let lexer = Lexer::new(program);
+    
     return Parser {lexer: lexer.peekable(), symbol_table_chain: vec![], errors: vec![]};
   }
   
@@ -42,25 +43,21 @@ impl <'a>Parser<'a> {
         let period = self.parse_tok(tokens::period::Period::start());
         if let ParserResult::Success = period {
           
-          // Check that this is the end of the file
-          if let None = self.lexer.peek() {
-            println!("Program parsed.");
-            self.lexer.next();
-            return ParserResult::Success;
-          } else if let Some(tok_entry) = self.lexer.peek() {
+          if let Some(tok_entry) = self.lexer.peek() {
             // unexpected token after end of program
-            let result = ParserResult::ErrUnexpectedTok {expected: String::from("<end of program>"), actual: String::from(&tok_entry.chars[..])};
+            let result = ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("<end of program>"), actual: String::from(&tok_entry.chars[..])};
             
             result.print();
             
             return result;
+          } else {
+            println!("Program parsed.");
+            self.lexer.next();
+            return ParserResult::Success;
           }
-          
-        } else { period.print(); }
-      } else { program_body.print(); }
-    } else { program_header.print(); }
-    
-    return ParserResult::Error;
+        } else { period.print(); return period; }
+      } else { program_body.print(); return program_body; }
+    } else { program_header.print(); return program_header; }
     
   }
   
@@ -77,13 +74,11 @@ impl <'a>Parser<'a> {
           return ParserResult::Success;
         } else {
           is_kw.print();
+          return is_kw;
         }
         
-      } else { identifier.print(); }
-    } else { program_kw.print(); }
-    
-    return ParserResult::Error;
-    
+      } else { identifier.print(); return identifier; }
+    } else { program_kw.print(); return program_kw; }
   }
   
   pub fn program_body(&mut self) -> ParserResult {
@@ -95,7 +90,7 @@ impl <'a>Parser<'a> {
           // these tokens are in First(declaration). Parse the declaration and a terminating semicolon
           Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => {
             let declaration = self.declaration();
-            if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = &declaration {
+            if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = &declaration {
               declaration.print();
             }
             
@@ -117,7 +112,7 @@ impl <'a>Parser<'a> {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
               // if able to parse a statement, parse a terminating semicolon
               let statement = self.statement();
-              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                 statement.print();
               }
               
@@ -137,11 +132,9 @@ impl <'a>Parser<'a> {
         let program_kw = self.parse_tok(tokens::program_kw::ProgramKW::start());
         if let ParserResult::Success = program_kw {
           return ParserResult::Success;
-        }
-      } else { end_kw.print(); }
-    } else { begin_kw.print(); }
-  
-    return ParserResult::Error;
+        } else { program_kw.print(); return program_kw; }
+      } else { end_kw.print(); return end_kw; }
+    } else { begin_kw.print(); return begin_kw; }
   }
   
   pub fn declaration(&mut self) -> ParserResult {
@@ -155,7 +148,7 @@ impl <'a>Parser<'a> {
         Token::ProcedureKW(_tok) => { return self.procedure_declaration(); },
         Token::VariableKW(_tok) => {return self.variable_declaration(); },
         Token::TypeKW(_tok) => { return self.type_declaration(); },
-        _ => { return ParserResult::ErrUnexpectedTok {expected: String::from("(procedure|variable|type)"), actual: String::from(&tok_entry.chars[..])}; }
+        _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(procedure|variable|type)"), actual: String::from(&tok_entry.chars[..])}; }
       }
       
     } else {
@@ -169,10 +162,8 @@ impl <'a>Parser<'a> {
       let procedure_body = self.procedure_body();
       if let ParserResult::Success = procedure_body {
         return ParserResult::Success;
-      } else { procedure_body.print(); }
-    } else { procedure_header.print(); }
-    
-    return ParserResult::Error;
+      } else { procedure_body.print(); return procedure_body;}
+    } else { procedure_header.print(); return procedure_header;}
   }
   
   pub fn procedure_header(&mut self) -> ParserResult {
@@ -199,14 +190,12 @@ impl <'a>Parser<'a> {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
               if let ParserResult::Success = r_paren {
                 return ParserResult::Success;
-              } else { r_paren.print(); }
-            } else { l_paren.print(); }
-          } else { type_mark.print(); }
-        } else { colon.print(); }
-      } else { identifier.print(); }
-    } else { procedure_kw.print(); }
-  
-    return ParserResult::Error;
+              } else { r_paren.print(); return r_paren; }
+            } else { l_paren.print(); return l_paren; }
+          } else { type_mark.print(); return type_mark; }
+        } else { colon.print(); return colon; }
+      } else { identifier.print(); return identifier; }
+    } else { procedure_kw.print(); return procedure_kw; }
   }
   
   pub fn type_mark(&mut self) -> ParserResult {
@@ -253,7 +242,7 @@ impl <'a>Parser<'a> {
           }
           
         },
-        _ => { return ParserResult::ErrUnexpectedTok{expected: String::from("<some_type_kw>"), actual: String::from(&tok_entry.chars[..])}; }
+        _ => { return ParserResult::ErrUnexpectedTok{line_num: tok_entry.line_num, expected: String::from("<some_type_kw>"), actual: String::from(&tok_entry.chars[..])}; }
       }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
@@ -294,7 +283,7 @@ impl <'a>Parser<'a> {
           // these tokens are in First(declaration). Parse the declaration and a terminating semicolon
           Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => {
             let declaration = self.declaration();
-            if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = declaration {
+            if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = declaration {
               declaration.print();
             }
             
@@ -316,7 +305,7 @@ impl <'a>Parser<'a> {
           match &tok_entry.tok_type {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
               let statement = self.statement();
-              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                 statement.print();
               }
               
@@ -410,7 +399,7 @@ impl <'a>Parser<'a> {
         Token::IfKW(_) => { return self.if_statement(); },
         Token::ForKW(_) => { return self.loop_statement(); },
         Token::ReturnKW(_) => { return self.return_statement(); },
-        _ => { return ParserResult::ErrUnexpectedTok {expected: String::from("(<identifier>|if|for|return)"), actual: String::from(&tok_entry.chars[..])} }
+        _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(<identifier>|if|for|return)"), actual: String::from(&tok_entry.chars[..])} }
       }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
@@ -773,7 +762,7 @@ impl <'a>Parser<'a> {
                     Token::ElseKW(_) | Token::EndKW(_) => break,
                     _ => {
                       let statement = self.statement();
-                      if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                      if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                         statement.print();
                       } 
                       
@@ -795,7 +784,7 @@ impl <'a>Parser<'a> {
                       Token::EndKW(_) => break,
                       _ => {
                         let statement = self.statement();
-                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                           statement.print();
                         } 
                         
@@ -842,7 +831,7 @@ impl <'a>Parser<'a> {
                       Token::EndKW(_) => break,
                       _ => {
                         let statement = self.statement();
-                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error = statement {
+                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                           statement.print();
                         }
                         self.resync();
@@ -898,7 +887,7 @@ impl <'a>Parser<'a> {
       match &tok_entry.tok_type {
         Token::Identifier(_) => { return self.name() },
         Token::Number(_) => { return self.parse_tok(tokens::number::Number::start()) },
-        _ => { return ParserResult::ErrUnexpectedTok {expected: String::from("(<identifier>|<number>)"), actual: String::from(&tok_entry.chars[..])}; }
+        _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(<identifier>|<number>)"), actual: String::from(&tok_entry.chars[..])}; }
       }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
@@ -929,7 +918,7 @@ impl <'a>Parser<'a> {
         Token::Number(_) => { return self.parse_tok(tokens::number::Number::start()); }
         Token::TrueKW(_) => { return self.parse_tok(tokens::true_kw::TrueKW::start()); },
         Token::FalseKW(_) => { return self.parse_tok(tokens::false_kw::FalseKW::start()); },
-        _ => { return ParserResult::ErrUnexpectedTok {expected: String::from("('('|<identifier>|'-'|<number>|<string>|true|false)"), actual: String::from(&tok_entry.chars[..])} }
+        _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("('('|<identifier>|'-'|<number>|<string>|true|false)"), actual: String::from(&tok_entry.chars[..])} }
       }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
@@ -942,12 +931,13 @@ impl <'a>Parser<'a> {
         self.lexer.next();
       
         return ParserResult::Success;
-      } else { return ParserResult::ErrUnexpectedTok {expected: String::from(target.get_example()), actual: String::from(&tok_entry.chars[..])}; }
+      } else { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from(target.get_example()), actual: String::from(&tok_entry.chars[..])}; }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
   // consume tokens until a semicolon is hit, and then consume the semicolon
   pub fn resync(&mut self) {
+    let mut missed_semicolon = false;
     loop {
       let result = self.parse_tok(tokens::semicolon::Semicolon::start());
       
@@ -958,7 +948,10 @@ impl <'a>Parser<'a> {
           break;
         },
         _ => {
-          result.print();
+          if (!missed_semicolon) {
+            result.print();
+            missed_semicolon = true;
+          }
           self.lexer.next();
         }
       }
@@ -970,17 +963,17 @@ impl <'a>Parser<'a> {
 // TODO add chaining behavior so that we can chain parse rules until a failure is reached. This would really simplify this code by flattening all these nested ifs
 pub enum ParserResult {
   ErrUnexpectedEnd,
-  ErrUnexpectedTok{ expected: String, actual: String },
+  ErrUnexpectedTok{ expected: String, actual: String, line_num: u32},
   Success,
-  Error
+  Error{line_num: u32}
 }
 
 impl ParserResult {
   pub fn print(&self) {
     match self {
       ParserResult::ErrUnexpectedEnd => { println!("Unexpected end of program."); },
-      ParserResult::ErrUnexpectedTok{ expected, actual } => { println!("Unexpected token - Expected: '{}', got: '{}'", expected, actual); },
-      ParserResult::Error => { println!("Unknown error"); },
+      ParserResult::ErrUnexpectedTok{line_num, expected, actual} => { println!("({}) - Unexpected token - Expected: '{}', got: '{}'", line_num, expected, actual); },
+      ParserResult::Error{line_num} => { println!("({}) - Unknown error", line_num); },
       ParserResult::Success => { println!("Success"); }
     }
   }
