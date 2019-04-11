@@ -227,7 +227,6 @@ impl <'a> Iterator for Lexer<'a> {
       if !is_comment {
         break;
       }
-    
     }
     
     return next_token;

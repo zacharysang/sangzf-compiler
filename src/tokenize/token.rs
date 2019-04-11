@@ -234,3 +234,14 @@ impl Token {
   }
   
 }
+
+pub enum Type {
+  Procedure,
+  Type,
+  Enum,
+  Integer,
+  Float,
+  String,
+  Bool,
+  Custom(String)
+}

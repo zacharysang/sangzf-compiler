@@ -948,7 +948,7 @@ impl <'a>Parser<'a> {
           break;
         },
         _ => {
-          if (!missed_semicolon) {
+          if !missed_semicolon {
             result.print();
             missed_semicolon = true;
           }
@@ -957,7 +957,6 @@ impl <'a>Parser<'a> {
       }
     }
   }
-  
 }
 
 // TODO add chaining behavior so that we can chain parse rules until a failure is reached. This would really simplify this code by flattening all these nested ifs
