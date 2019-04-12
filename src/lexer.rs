@@ -5,6 +5,7 @@ use std::str::Chars;
 use crate::tokenize::lexable::Lexable;
 use crate::tokenize::token::Token;
 use crate::tokenize::token::TokenEntry;
+use crate::tokenize::token::Type;
 use crate::tokenize::char_group::CharGroup;
 
 use crate::tokens;
@@ -204,7 +205,7 @@ impl <'a> Iterator for Lexer<'a> {
             is_comment = true;
           }
         
-          next_token = Some(TokenEntry { line_num: self.line_num, chars: chars, tok_type: tok_type});
+          next_token = Some(TokenEntry { line_num: self.line_num, chars: chars, tok_type: tok_type, r#type: Type::None});
         }
     
       } else {
@@ -218,7 +219,7 @@ impl <'a> Iterator for Lexer<'a> {
           // only report errors on non-zero tokens
           if chars.len() > 0 {
             self.errors.push(format!("Error! Unrecognized token, '{}' at line: {}", chars, self.line_num));
-            next_token = Some(TokenEntry {line_num: self.line_num, chars: chars.to_string(), tok_type: caught_tok});
+            next_token = Some(TokenEntry {line_num: self.line_num, chars: chars.to_string(), tok_type: caught_tok, r#type: Type::None});
           }
         }
           

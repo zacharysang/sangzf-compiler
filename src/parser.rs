@@ -13,14 +13,22 @@ use crate::tokens;
 pub struct Parser<'a> {
   pub lexer: Peekable<Lexer<'a>>,
   pub symbol_table_chain: Vec<HashMap<String, TokenEntry>>,
-  pub errors: Vec<ParserResult>
+  pub global_symbol_table: HashMap<String, TokenEntry>
 }
 
 impl <'a>Parser<'a> {
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
     let lexer = Lexer::new(program);
     
-    return Parser {lexer: lexer.peekable(), symbol_table_chain: vec![], errors: vec![]};
+    let mut symbol_table_chain = vec![];
+    
+    let parser = Parser {
+      lexer: lexer.peekable(),
+      symbol_table_chain: symbol_table_chain,
+      global_symbol_table: HashMap::new()
+    };
+    
+    return parser;
   }
   
   
@@ -82,6 +90,10 @@ impl <'a>Parser<'a> {
   }
   
   pub fn program_body(&mut self) -> ParserResult {
+    
+    // create a new symbol table for this scope
+    self.symbol_table_chain.push(HashMap::new());
+    
     // while next token is in First(declaration), read in a declaration w/ semicolon terminator 
     loop {
       if let Some(tok_entry) = self.lexer.peek() {
@@ -131,6 +143,10 @@ impl <'a>Parser<'a> {
       if let ParserResult::Success = end_kw {
         let program_kw = self.parse_tok(tokens::program_kw::ProgramKW::start());
         if let ParserResult::Success = program_kw {
+        
+          // leave the current scope
+          self.symbol_table_chain.pop();
+        
           return ParserResult::Success;
         } else { program_kw.print(); return program_kw; }
       } else { end_kw.print(); return end_kw; }
@@ -138,16 +154,25 @@ impl <'a>Parser<'a> {
   }
   
   pub fn declaration(&mut self) -> ParserResult {
-    if let ParserResult::Success = self.parse_tok(tokens::global_kw::GlobalKW::start()) {
-      // bring the global symbol table to focus
-    }
+  
+    let is_global = if let ParserResult::Success = self.parse_tok(tokens::global_kw::GlobalKW::start()) {
+      true
+    } else {
+      false
+    };
     
     if let Some(tok_entry) = self.lexer.peek() {
     
+      let scope = if is_global {
+        Scope::Global
+      } else {
+        Scope::Local
+      };
+    
       match &tok_entry.tok_type {
-        Token::ProcedureKW(_tok) => { return self.procedure_declaration(); },
-        Token::VariableKW(_tok) => {return self.variable_declaration(); },
-        Token::TypeKW(_tok) => { return self.type_declaration(); },
+        Token::ProcedureKW(_tok) => { return self.procedure_declaration(&scope); },
+        Token::VariableKW(_tok) => {return self.variable_declaration(&scope); },
+        Token::TypeKW(_tok) => { return self.type_declaration(&scope); },
         _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(procedure|variable|type)"), actual: String::from(&tok_entry.chars[..])}; }
       }
       
@@ -156,17 +181,17 @@ impl <'a>Parser<'a> {
     }
   }
   
-  pub fn procedure_declaration(&mut self) -> ParserResult {
-    let procedure_header = self.procedure_header();
+  pub fn procedure_declaration(&mut self, scope: &Scope) -> ParserResult {
+    let procedure_header = self.procedure_header(scope);
     if let ParserResult::Success = procedure_header {
-      let procedure_body = self.procedure_body();
+      let procedure_body = self.procedure_body(scope);
       if let ParserResult::Success = procedure_body {
         return ParserResult::Success;
       } else { procedure_body.print(); return procedure_body;}
     } else { procedure_header.print(); return procedure_header;}
   }
   
-  pub fn procedure_header(&mut self) -> ParserResult {
+  pub fn procedure_header(&mut self, scope: &Scope) -> ParserResult {
     let procedure_kw = self.parse_tok(tokens::procedure_kw::ProcedureKW::start());
     if let ParserResult::Success = procedure_kw {
     
@@ -183,7 +208,7 @@ impl <'a>Parser<'a> {
               let next_tok = self.lexer.peek();
               if let Some(tok_entry) = next_tok {
                 if let Token::VariableKW(_) = &tok_entry.tok_type {
-                  self.parameter_list();
+                  self.parameter_list(scope);
                 }
               }
               
@@ -247,16 +272,16 @@ impl <'a>Parser<'a> {
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn parameter_list(&mut self) -> ParserResult {
+  pub fn parameter_list(&mut self, scope: &Scope) -> ParserResult {
     
-    let parameter = self.parameter();
+    let parameter = self.parameter(scope);
     if let ParserResult::Success = parameter {
       
       // optionally parse another parameter list (delimited by comma)
       let comma = self.parse_tok(tokens::comma::Comma::start());
       if let ParserResult::Success = comma {
         // call recursively to parse the rest of the list
-        return self.parameter_list();
+        return self.parameter_list(scope);
       } else {
         return ParserResult::Success;
       }
@@ -268,11 +293,14 @@ impl <'a>Parser<'a> {
     
   }
   
-  pub fn parameter(&mut self) -> ParserResult {
-    return self.variable_declaration();
+  pub fn parameter(&mut self, scope: &Scope) -> ParserResult {
+    return self.variable_declaration(scope);
   }
   
-  pub fn procedure_body(&mut self) -> ParserResult {
+  pub fn procedure_body(&mut self, scope: &Scope) -> ParserResult {
+  
+    // create a new symbol table for this scope
+    self.symbol_table_chain.push(HashMap::new());
   
     // TODO break this out to its own function
     // parse an optional number of declarations delimited by semicolon
@@ -323,13 +351,18 @@ impl <'a>Parser<'a> {
       if let ParserResult::Success = end_kw {
         let procedure_kw = self.parse_tok(tokens::procedure_kw::ProcedureKW::start());
         if let ParserResult::Success = procedure_kw {
+        
+          // leave the current scope
+          self.symbol_table_chain.pop();
+        
           return ParserResult::Success;
+          
         } else { return procedure_kw; }
       } else { return end_kw; }
     } else { return begin_kw; }
   }
   
-  pub fn variable_declaration(&mut self) -> ParserResult {
+  pub fn variable_declaration(&mut self, scope: &Scope) -> ParserResult {
     
     let variable_kw = self.parse_tok(tokens::variable_kw::VariableKW::start());
     if let ParserResult::Success = variable_kw {
@@ -356,6 +389,16 @@ impl <'a>Parser<'a> {
               }
             }
             
+            // add the identifier to the symbol table
+            match scope {
+              Scope::Local => {
+                
+              },
+              Scope::Global => {
+                
+              }
+            }
+            
             return ParserResult::Success;
             
           } else { return type_mark; }
@@ -373,7 +416,7 @@ impl <'a>Parser<'a> {
     
   }
   
-  pub fn type_declaration(&mut self) -> ParserResult {
+  pub fn type_declaration(&mut self, scope: &Scope) -> ParserResult {
     let type_kw = self.parse_tok(tokens::type_kw::TypeKW::start());
     if let ParserResult::Success = type_kw {
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
@@ -964,7 +1007,7 @@ pub enum ParserResult {
   ErrUnexpectedEnd,
   ErrUnexpectedTok{ expected: String, actual: String, line_num: u32},
   Success,
-  Error{line_num: u32}
+  Error{line_num: u32, msg: String}
 }
 
 impl ParserResult {
@@ -972,8 +1015,13 @@ impl ParserResult {
     match self {
       ParserResult::ErrUnexpectedEnd => { println!("Unexpected end of program."); },
       ParserResult::ErrUnexpectedTok{line_num, expected, actual} => { println!("({}) - Unexpected token - Expected: '{}', got: '{}'", line_num, expected, actual); },
-      ParserResult::Error{line_num} => { println!("({}) - Unknown error", line_num); },
+      ParserResult::Error{line_num, msg} => { println!("({}) - Error: {}", line_num, msg); },
       ParserResult::Success => { println!("Success"); }
     }
   }
+}
+
+pub enum Scope {
+  Local,
+  Global
 }
