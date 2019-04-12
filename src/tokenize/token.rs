@@ -10,6 +10,17 @@ pub struct TokenEntry {
   pub r#type: Type
 }
 
+impl TokenEntry {
+  pub fn none_tok() -> TokenEntry {
+    return TokenEntry {
+      chars: String::from(""),
+      tok_type: Token::Unknown(tokens::unknown::Unknown{state: None}),
+      line_num: 0,
+      r#type: Type::None
+    }
+  }
+}
+
 pub enum Token {
   ProgramKW(tokens::program_kw::ProgramKW),
   BeginKW(tokens::begin_kw::BeginKW),
@@ -233,7 +244,6 @@ impl Token {
       Token::Unknown(_) => "<other>"
     }
   }
-  
 }
 
 pub enum Type {

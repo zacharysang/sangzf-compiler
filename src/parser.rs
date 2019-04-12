@@ -42,14 +42,14 @@ impl <'a>Parser<'a> {
   pub fn program(&mut self) -> ParserResult {
     
     let program_header = self.program_header();
-    if let ParserResult::Success = program_header {
+    if let ParserResult::Success(_) = program_header {
     
       let program_body = self.program_body();
-      if let ParserResult::Success = program_body {
+      if let ParserResult::Success(_) = program_body {
       
         // Check for terminating period
         let period = self.parse_tok(tokens::period::Period::start());
-        if let ParserResult::Success = period {
+        if let ParserResult::Success(period_entry) = period {
           
           if let Some(tok_entry) = self.lexer.peek() {
             // unexpected token after end of program
@@ -60,8 +60,7 @@ impl <'a>Parser<'a> {
             return result;
           } else {
             println!("Program parsed.");
-            self.lexer.next();
-            return ParserResult::Success;
+            return ParserResult::Success(period_entry);
           }
         } else { period.print(); return period; }
       } else { program_body.print(); return program_body; }
@@ -72,14 +71,14 @@ impl <'a>Parser<'a> {
   pub fn program_header(&mut self) -> ParserResult {
     // tok_entry is a borrowed value so it will not be able to be moved
     let program_kw = self.parse_tok(tokens::program_kw::ProgramKW::start());
-    if let ParserResult::Success = program_kw {
+    if let ParserResult::Success(..) = program_kw {
     
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-      if let ParserResult::Success = identifier {
+      if let ParserResult::Success(..) = identifier {
       
         let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
-        if let ParserResult::Success = is_kw {
-          return ParserResult::Success;
+        if let ParserResult::Success(tok_entry) = is_kw {
+          return ParserResult::Success(tok_entry);
         } else {
           is_kw.print();
           return is_kw;
@@ -116,7 +115,7 @@ impl <'a>Parser<'a> {
     }
     
     let begin_kw = self.parse_tok(tokens::begin_kw::BeginKW::start());
-    if let ParserResult::Success = begin_kw {
+    if let ParserResult::Success(_) = begin_kw {
       // while next token is in First(statement), read in statement w/ semicolon terminator
       loop {
         if let Some(tok_entry) = self.lexer.peek() {
@@ -140,14 +139,14 @@ impl <'a>Parser<'a> {
       
       // parse the end kw
       let end_kw = self.parse_tok(tokens::end_kw::EndKW::start());
-      if let ParserResult::Success = end_kw {
+      if let ParserResult::Success(_) = end_kw {
         let program_kw = self.parse_tok(tokens::program_kw::ProgramKW::start());
-        if let ParserResult::Success = program_kw {
+        if let ParserResult::Success(tok_entry) = program_kw {
         
           // leave the current scope
           self.symbol_table_chain.pop();
         
-          return ParserResult::Success;
+          return ParserResult::Success(tok_entry);
         } else { program_kw.print(); return program_kw; }
       } else { end_kw.print(); return end_kw; }
     } else { begin_kw.print(); return begin_kw; }
@@ -155,7 +154,7 @@ impl <'a>Parser<'a> {
   
   pub fn declaration(&mut self) -> ParserResult {
   
-    let is_global = if let ParserResult::Success = self.parse_tok(tokens::global_kw::GlobalKW::start()) {
+    let is_global = if let ParserResult::Success(..) = self.parse_tok(tokens::global_kw::GlobalKW::start()) {
       true
     } else {
       false
@@ -183,26 +182,26 @@ impl <'a>Parser<'a> {
   
   pub fn procedure_declaration(&mut self, scope: &Scope) -> ParserResult {
     let procedure_header = self.procedure_header(scope);
-    if let ParserResult::Success = procedure_header {
+    if let ParserResult::Success(_) = procedure_header {
       let procedure_body = self.procedure_body(scope);
-      if let ParserResult::Success = procedure_body {
-        return ParserResult::Success;
+      if let ParserResult::Success(_) = procedure_body {
+        return return procedure_body;
       } else { procedure_body.print(); return procedure_body;}
     } else { procedure_header.print(); return procedure_header;}
   }
   
   pub fn procedure_header(&mut self, scope: &Scope) -> ParserResult {
     let procedure_kw = self.parse_tok(tokens::procedure_kw::ProcedureKW::start());
-    if let ParserResult::Success = procedure_kw {
+    if let ParserResult::Success(_) = procedure_kw {
     
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-      if let ParserResult::Success = identifier {
+      if let ParserResult::Success(_)= identifier {
         let colon = self.parse_tok(tokens::colon::Colon::start());
-        if let ParserResult::Success = colon {
+        if let ParserResult::Success(_)= colon {
           let type_mark = self.type_mark();
-          if let ParserResult::Success = type_mark {
+          if let ParserResult::Success(_)= type_mark {
             let l_paren = self.parse_tok(tokens::parens::LParen::start());
-            if let ParserResult::Success = l_paren {
+            if let ParserResult::Success(_)= l_paren {
             
               // read optional parameter list
               let next_tok = self.lexer.peek();
@@ -213,8 +212,8 @@ impl <'a>Parser<'a> {
               }
               
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
-              if let ParserResult::Success = r_paren {
-                return ParserResult::Success;
+              if let ParserResult::Success(_)= r_paren {
+                return r_paren;
               } else { r_paren.print(); return r_paren; }
             } else { l_paren.print(); return l_paren; }
           } else { type_mark.print(); return type_mark; }
@@ -227,23 +226,53 @@ impl <'a>Parser<'a> {
   
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = peek_tok {
-      match &tok_entry.tok_type {
-        Token::IntegerKW(_) => { self.lexer.next(); return ParserResult::Success; },
-        Token::FloatKW(_) => { self.lexer.next(); return ParserResult::Success; },
-        Token::StringKW(_) => { self.lexer.next(); return ParserResult::Success; },
-        Token::BoolKW(_) => { self.lexer.next(); return ParserResult::Success; },
-        Token::Identifier(_) => { self.lexer.next(); return ParserResult::Success; },
+      match tok_entry.tok_type {
+        Token::IntegerKW(_) => { 
+          if let Some(entry) = self.lexer.next() {
+            return ParserResult::Success(entry); 
+          } else {
+            return ParserResult::ErrUnexpectedEnd;
+          }
+        },
+        Token::FloatKW(_) => {
+          if let Some(entry) = self.lexer.next() {
+            return ParserResult::Success(entry);
+          } else {
+            return ParserResult::ErrUnexpectedEnd;
+          }
+        },
+        Token::StringKW(_) => { 
+          if let Some(entry) = self.lexer.next() {
+            return ParserResult::Success(entry);
+          } else {
+            return ParserResult::ErrUnexpectedEnd;
+          }
+        },
+        Token::BoolKW(_) => {
+          if let Some(entry) = self.lexer.next() {
+            return ParserResult::Success(entry);
+          } else {
+            return ParserResult::ErrUnexpectedEnd;
+          }
+        },
+        Token::Identifier(_) => {
+          if let Some(entry) = self.lexer.next() {
+            return ParserResult::Success(entry);
+          } else {
+            return ParserResult::ErrUnexpectedEnd;
+          }
+        },
         Token::EnumKW(_) => {
           self.lexer.next();
           
           let l_brace = self.parse_tok(tokens::braces::LBrace::start());
-          if let ParserResult::Success = l_brace {
+          if let ParserResult::Success(_)= l_brace {
             let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-            if let ParserResult::Success = identifier {
+            if let ParserResult::Success(_)= identifier {
             
               loop {
                 // optionally parse additional identifiers (delimited by comma)
-                if let ParserResult::Success = self.parse_tok(tokens::comma::Comma::start()) {
+                if let ParserResult::Success(_)= self.parse_tok(tokens::comma::Comma::start()) {
                   self.parse_tok(tokens::identifier::Identifier::start());
                 } else {
                   break;
@@ -251,8 +280,8 @@ impl <'a>Parser<'a> {
               }
               
               let r_brace = self.parse_tok(tokens::braces::RBrace::start());
-              if let ParserResult::Success = r_brace {
-                return ParserResult::Success;
+              if let ParserResult::Success(_)= r_brace {
+                return r_brace;
               } else {
                 r_brace.print();
                 return r_brace;
@@ -275,15 +304,15 @@ impl <'a>Parser<'a> {
   pub fn parameter_list(&mut self, scope: &Scope) -> ParserResult {
     
     let parameter = self.parameter(scope);
-    if let ParserResult::Success = parameter {
+    if let ParserResult::Success(_) = parameter {
       
       // optionally parse another parameter list (delimited by comma)
       let comma = self.parse_tok(tokens::comma::Comma::start());
-      if let ParserResult::Success = comma {
+      if let ParserResult::Success(_)= comma {
         // call recursively to parse the rest of the list
         return self.parameter_list(scope);
       } else {
-        return ParserResult::Success;
+        return parameter;
       }
       
     } else {
@@ -325,7 +354,7 @@ impl <'a>Parser<'a> {
     }
     
     let begin_kw = self.parse_tok(tokens::begin_kw::BeginKW::start());
-    if let ParserResult::Success = begin_kw {
+    if let ParserResult::Success(_)= begin_kw {
       // parse an optional number of statements
       // TODO break this out to its own function
       loop {
@@ -348,14 +377,14 @@ impl <'a>Parser<'a> {
       }
       
       let end_kw = self.parse_tok(tokens::end_kw::EndKW::start());
-      if let ParserResult::Success = end_kw {
+      if let ParserResult::Success(_)= end_kw {
         let procedure_kw = self.parse_tok(tokens::procedure_kw::ProcedureKW::start());
-        if let ParserResult::Success = procedure_kw {
+        if let ParserResult::Success(_)= procedure_kw {
         
           // leave the current scope
           self.symbol_table_chain.pop();
         
-          return ParserResult::Success;
+          return procedure_kw;
           
         } else { return procedure_kw; }
       } else { return end_kw; }
@@ -365,22 +394,22 @@ impl <'a>Parser<'a> {
   pub fn variable_declaration(&mut self, scope: &Scope) -> ParserResult {
     
     let variable_kw = self.parse_tok(tokens::variable_kw::VariableKW::start());
-    if let ParserResult::Success = variable_kw {
+    if let ParserResult::Success(_)= variable_kw {
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-      if let ParserResult::Success = identifier {
+      if let ParserResult::Success(_)= identifier {
         let colon = self.parse_tok(tokens::colon::Colon::start());
-        if let ParserResult::Success = colon {
+        if let ParserResult::Success(_)= colon {
           let type_mark = self.type_mark();
-          if let ParserResult::Success = type_mark {
+          if let ParserResult::Success(_)= type_mark {
             
             // optionally parse a bound
             let l_bracket = self.parse_tok(tokens::brackets::LBracket::start());
-            if let ParserResult::Success = l_bracket {
+            if let ParserResult::Success(_)= l_bracket {
               let bound = self.bound();
-              if let ParserResult::Success = bound {
+              if let ParserResult::Success(_)= bound {
                 let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
-                if let ParserResult::Success = r_bracket {
-                  return ParserResult::Success;
+                if let ParserResult::Success(_)= r_bracket {
+                  return r_bracket;
                 } else {
                   return r_bracket;
                 }
@@ -399,7 +428,7 @@ impl <'a>Parser<'a> {
               }
             }
             
-            return ParserResult::Success;
+            return type_mark;
             
           } else { return type_mark; }
         } else { return colon; }
@@ -418,14 +447,14 @@ impl <'a>Parser<'a> {
   
   pub fn type_declaration(&mut self, scope: &Scope) -> ParserResult {
     let type_kw = self.parse_tok(tokens::type_kw::TypeKW::start());
-    if let ParserResult::Success = type_kw {
+    if let ParserResult::Success(_)= type_kw {
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-      if let ParserResult::Success = identifier {
+      if let ParserResult::Success(_)= identifier {
         let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
-        if let ParserResult::Success = is_kw {
+        if let ParserResult::Success(_)= is_kw {
           let type_mark = self.type_mark();
-          if let ParserResult::Success = type_mark {
-            return ParserResult::Success;
+          if let ParserResult::Success(..) = type_mark {
+            return type_mark;
           } else { return type_mark; }
         } else { return is_kw; }
       } else { return identifier; }
@@ -448,16 +477,16 @@ impl <'a>Parser<'a> {
   }
   
   pub fn procedure_call_w_identifier(&mut self, identifier: ParserResult) -> ParserResult {
-    if let ParserResult::Success = identifier {
+    if let ParserResult::Success(_)= identifier {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
-      if let ParserResult::Success = l_paren {
+      if let ParserResult::Success(_)= l_paren {
         
         // parse optional argument list
         self.argument_list();
         
         let r_paren = self.parse_tok(tokens::parens::RParen::start());
-        if let ParserResult::Success = r_paren {
-          return ParserResult::Success;
+        if let ParserResult::Success(_)= r_paren {
+          return r_paren;
         } else { return r_paren; }
       } else { return l_paren; }
     } else { return identifier; }
@@ -472,7 +501,7 @@ impl <'a>Parser<'a> {
   }
   
   pub fn name_w_identifier(&mut self, identifier: ParserResult) -> ParserResult {
-    if let ParserResult::Success = identifier {
+    if let ParserResult::Success(..) = identifier {
     
       // optionally parse square bracket
       let peek_tok = self.lexer.peek();
@@ -483,10 +512,10 @@ impl <'a>Parser<'a> {
           self.lexer.next();
           
           let expression = self.expression();
-          if let ParserResult::Success = expression {
+          if let ParserResult::Success(_)= expression {
             let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
-            if let ParserResult::Success = r_bracket {
-              return ParserResult::Success;
+            if let ParserResult::Success(_)= r_bracket {
+              return r_bracket;
             } else {
               return r_bracket;
             }
@@ -496,7 +525,7 @@ impl <'a>Parser<'a> {
         }
       }
       
-      return ParserResult::Success;
+      return identifier;
       
     } else { return identifier; }
   }
@@ -512,9 +541,9 @@ impl <'a>Parser<'a> {
     fn _term<'a>(slf: &mut Parser<'a>) -> ParserResult {
       // accept either a '*' or '/'
       let asterisk = slf.parse_tok(tokens::asterisk::Asterisk::start());
-      if let ParserResult::Success = asterisk {
+      if let ParserResult::Success(_)= asterisk {
         let factor = slf.factor();
-        if let ParserResult::Success = factor {
+        if let ParserResult::Success(_)= factor {
           return _term(slf);
         } else {
           return factor;
@@ -522,9 +551,9 @@ impl <'a>Parser<'a> {
       }
       
       let slash = slf.parse_tok(tokens::slash::Slash::start());
-      if let ParserResult::Success = slash {
+      if let ParserResult::Success(_)= slash {
         let factor = slf.factor();
-        if let ParserResult::Success = factor {
+        if let ParserResult::Success(_)= factor {
           return _term(slf);
         } else {
           return factor;
@@ -532,13 +561,13 @@ impl <'a>Parser<'a> {
       }
       
       // allow _term to parse nothing
-      return ParserResult::Success;
+      return ParserResult::Success(TokenEntry::none_tok());
       
     }
   
     // read bottomed-out factor rule
     let factor = self.factor();
-    if let ParserResult::Success = factor {
+    if let ParserResult::Success(_)= factor {
       return _term(self);
     } else { return factor; }
     
@@ -551,9 +580,9 @@ impl <'a>Parser<'a> {
         match &tok_entry.tok_type {
           Token::LT(_) => {
             let lt = slf.parse_tok(tokens::lt::LT::start());
-            if let ParserResult::Success = lt {
+            if let ParserResult::Success(_)= lt {
               let term = slf.term();
-              if let ParserResult::Success = term {
+              if let ParserResult::Success(_)= term {
                 return _relation(slf);
               } else {
                 return term;
@@ -564,9 +593,9 @@ impl <'a>Parser<'a> {
           },
           Token::GTE(_) => {
             let gte = slf.parse_tok(tokens::gte::GTE::start());
-            if let ParserResult::Success = gte {
+            if let ParserResult::Success(_)= gte {
               let term = slf.term();
-              if let ParserResult::Success = term {
+              if let ParserResult::Success(_)= term {
                 return _relation(slf);
               } else {
                 return term;
@@ -577,9 +606,9 @@ impl <'a>Parser<'a> {
           },
           Token::LTE(_) => {
             let lte = slf.parse_tok(tokens::lte::LTE::start());
-            if let ParserResult::Success = lte {
+            if let ParserResult::Success(_)= lte {
               let term = slf.term();
-              if let ParserResult::Success = term {
+              if let ParserResult::Success(_)= term {
                 return _relation(slf);
               } else {
                 return term;
@@ -590,9 +619,9 @@ impl <'a>Parser<'a> {
           },
           Token::GT(_) => {
             let gt = slf.parse_tok(tokens::gt::GT::start());
-            if let ParserResult::Success = gt {
+            if let ParserResult::Success(_)= gt {
               let term = slf.term();
-              if let ParserResult::Success = term {
+              if let ParserResult::Success(_)= term {
                 return _relation(slf);
               } else {
                 return term;
@@ -603,18 +632,18 @@ impl <'a>Parser<'a> {
           },
           Token::EQ(_) => {
             let eq = slf.parse_tok(tokens::eq::EQ::start());
-            if let ParserResult::Success = eq {
+            if let ParserResult::Success(_)= eq {
               let term = slf.term();
-              if let ParserResult::Success = term {
+              if let ParserResult::Success(_)= term {
                 return _relation(slf);
               } else { return term; }
             } else { return eq; }
           },
           Token::NEQ(_) => {
             let neq = slf.parse_tok(tokens::neq::NEQ::start());
-            if let ParserResult::Success = neq {
+            if let ParserResult::Success(_)= neq {
               let term = slf.term();
-              if let ParserResult::Success = term {
+              if let ParserResult::Success(_)= term {
                 return _relation(slf);
               } else { return term; }
             } else { return neq; }
@@ -623,17 +652,17 @@ impl <'a>Parser<'a> {
             // allow nothing to be parsed (allow lambda production)
             // this is the base case for this recursive function
             // will keep recursing until next token is not a comparison (<, >, etc.)
-            return ParserResult::Success; 
+            return ParserResult::Success(TokenEntry::none_tok()); 
           }
         }
       } else {
         // similar to catch-all, allow nothing to be parsed
-        return ParserResult::Success;
+        return ParserResult::Success(TokenEntry::none_tok());
       }
     }
     
     let term = self.term();
-    if let ParserResult::Success = term {
+    if let ParserResult::Success(_)= term {
       return _relation(self);
     } else {
       return term;
@@ -648,9 +677,9 @@ impl <'a>Parser<'a> {
         match &tok_entry.tok_type {
           Token::Plus(_) => {
             let plus = slf.parse_tok(tokens::plus::Plus::start());
-            if let ParserResult::Success = plus {
+            if let ParserResult::Success(_)= plus {
               let relation = slf.relation();
-              if let ParserResult::Success = relation {
+              if let ParserResult::Success(_)= relation {
                 return _arith_op(slf);
               } else {
                 return relation;
@@ -661,9 +690,9 @@ impl <'a>Parser<'a> {
           },
           Token::Dash(_) => {
             let dash = slf.parse_tok(tokens::dash::Dash::start());
-            if let ParserResult::Success = dash {
+            if let ParserResult::Success(_)= dash {
               let relation = slf.relation();
-              if let ParserResult::Success = relation {
+              if let ParserResult::Success(_)= relation {
                 return _arith_op(slf);
               } else {
                 return relation;
@@ -674,18 +703,18 @@ impl <'a>Parser<'a> {
           },
           _ => {
             // base case: allow nothing to be parsed if '+' and '-' not found
-            return ParserResult::Success;
+            return ParserResult::Success(TokenEntry::none_tok());
           }
         }
       } else {
         // base case
-        return ParserResult::Success;
+        return ParserResult::Success(TokenEntry::none_tok());
       }
     }
     
     // parse the initial relation where the recursion bottoms out
     let relation = self.relation();
-    if let ParserResult::Success = relation {
+    if let ParserResult::Success(_)= relation {
       return _arith_op(self);
     } else { return relation; }
   }
@@ -697,9 +726,9 @@ impl <'a>Parser<'a> {
         match &tok_entry.tok_type {
           Token::Ampersand(_) => {
             let ampersand = slf.parse_tok(tokens::ampersand::Ampersand::start());
-            if let ParserResult::Success = ampersand {
+            if let ParserResult::Success(_)= ampersand {
               let arith_op = slf.arith_op();
-              if let ParserResult::Success = arith_op {
+              if let ParserResult::Success(_)= arith_op {
                 return _expression(slf);
               } else {
                 return arith_op;
@@ -710,9 +739,9 @@ impl <'a>Parser<'a> {
           },
           Token::Pipe(_) => {
             let pipe = slf.parse_tok(tokens::pipe::Pipe::start());
-            if let ParserResult::Success = pipe {
+            if let ParserResult::Success(_)= pipe {
               let arith_op = slf.arith_op();
-              if let ParserResult::Success = arith_op {
+              if let ParserResult::Success(_)= arith_op {
                 return _expression(slf);
               } else {
                 return arith_op;
@@ -723,12 +752,12 @@ impl <'a>Parser<'a> {
           },
           _ => {
             // base case: if non-matching token is hit, do not parse (lambda-production)
-            return ParserResult::Success;
+            return ParserResult::Success(TokenEntry::none_tok());
           }
         }
       } else {
         // base case: allow nothing to be parsed
-        return ParserResult::Success;
+        return ParserResult::Success(TokenEntry::none_tok());
       }
     }
     
@@ -736,32 +765,32 @@ impl <'a>Parser<'a> {
     self.parse_tok(tokens::not_kw::NotKW::start());
     
     let arith_op = self.arith_op();
-    if let ParserResult::Success = arith_op {
+    if let ParserResult::Success(_)= arith_op {
       return _expression(self);
     } else { return arith_op; }
   }
   
   pub fn argument_list(&mut self) -> ParserResult {
     let expression = self.expression();
-    if let ParserResult::Success = expression {
+    if let ParserResult::Success(..) = expression {
       // optionally parse the rest
       let comma = self.parse_tok(tokens::comma::Comma::start());
-      if let ParserResult::Success = comma {
+      if let ParserResult::Success(..) = comma {
         return self.argument_list();
       }
       
-      return ParserResult::Success;
+      return expression;
     } else { return expression; }
   }
   
   pub fn assignment_statement(&mut self) -> ParserResult {
     let destination = self.destination();
-    if let ParserResult::Success = destination {
+    if let ParserResult::Success(_)= destination {
       let assign = self.parse_tok(tokens::assign::Assign::start());
-      if let ParserResult::Success = assign {
+      if let ParserResult::Success(_)= assign {
         let expression = self.expression();
-        if let ParserResult::Success = expression {
-          return ParserResult::Success;
+        if let ParserResult::Success(_)= expression {
+          return expression;
         } else { return expression; }
       } else { return assign; }
     } else { return destination; }
@@ -769,34 +798,34 @@ impl <'a>Parser<'a> {
   
   pub fn destination(&mut self) -> ParserResult {
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-    if let ParserResult::Success = identifier {
+    if let ParserResult::Success(_)= identifier {
       // optionally parse an index to this value
       let l_bracket = self.parse_tok(tokens::brackets::LBracket::start());
-      if let ParserResult::Success = l_bracket {
+      if let ParserResult::Success(_)= l_bracket {
         let expression = self.expression();
-        if let ParserResult::Success = expression {
+        if let ParserResult::Success(_)= expression {
           return self.parse_tok(tokens::brackets::RBracket::start());
         } else {
           return expression;
         }
       }
       
-      return ParserResult::Success;
+      return identifier;
       
     } else { return identifier; }
   }
   
   pub fn if_statement(&mut self) -> ParserResult {
     let if_kw = self.parse_tok(tokens::if_kw::IfKW::start());
-    if let ParserResult::Success = if_kw {
+    if let ParserResult::Success(_)= if_kw {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
-      if let ParserResult::Success = l_paren {
+      if let ParserResult::Success(_)= l_paren {
         let expression = self.expression();
-        if let ParserResult::Success = expression {
+        if let ParserResult::Success(_)= expression {
           let r_paren = self.parse_tok(tokens::parens::RParen::start());
-          if let ParserResult::Success = r_paren {
+          if let ParserResult::Success(_)= r_paren {
             let then_kw = self.parse_tok(tokens::then_kw::ThenKW::start());
-            if let ParserResult::Success = then_kw {
+            if let ParserResult::Success(_)= then_kw {
               
               // parse an arbitrary number of statements delimited by ';'
               loop {
@@ -819,7 +848,7 @@ impl <'a>Parser<'a> {
               
               // optionally parse else statement
               let else_kw = self.parse_tok(tokens::else_kw::ElseKW::start());
-              if let ParserResult::Success = else_kw {
+              if let ParserResult::Success(_)= else_kw {
                 // parse an arbitrary number of statements delimited by ';'
                 loop {
                   if let Some(tok_entry) = self.lexer.peek() {
@@ -841,7 +870,7 @@ impl <'a>Parser<'a> {
               }
               
               let end_kw = self.parse_tok(tokens::end_kw::EndKW::start());
-              if let ParserResult::Success = end_kw {
+              if let ParserResult::Success(_)= end_kw {
                 return self.parse_tok(tokens::if_kw::IfKW::start());
               } else { 
                 return end_kw;
@@ -855,17 +884,17 @@ impl <'a>Parser<'a> {
   
   pub fn loop_statement(&mut self) -> ParserResult {
     let for_kw = self.parse_tok(tokens::for_kw::ForKW::start());
-    if let ParserResult::Success = for_kw {
+    if let ParserResult::Success(_)= for_kw {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
-      if let ParserResult::Success = l_paren {
+      if let ParserResult::Success(_)= l_paren {
         let assignment_statement = self.assignment_statement();
-        if let ParserResult::Success = assignment_statement {
+        if let ParserResult::Success(_)= assignment_statement {
           let semicolon = self.parse_tok(tokens::semicolon::Semicolon::start());
-          if let ParserResult::Success = semicolon {
+          if let ParserResult::Success(_)= semicolon {
             let expression = self.expression();
-            if let ParserResult::Success = expression {
+            if let ParserResult::Success(_)= expression {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
-              if let ParserResult::Success = r_paren {
+              if let ParserResult::Success(_)= r_paren {
                 
                 // parse an arbitrary number of statements delimited by ';'
                 loop {
@@ -886,7 +915,7 @@ impl <'a>Parser<'a> {
                 }
                 
                 let end_kw = self.parse_tok(tokens::end_kw::EndKW::start());
-                if let ParserResult::Success = end_kw {
+                if let ParserResult::Success(_)= end_kw {
                   return self.parse_tok(tokens::for_kw::ForKW::start());
                 } else { return end_kw; }
               } else { return r_paren; }
@@ -899,7 +928,7 @@ impl <'a>Parser<'a> {
   
   pub fn return_statement(&mut self) -> ParserResult {
     let return_kw = self.parse_tok(tokens::return_kw::ReturnKW::start());
-    if let ParserResult::Success = return_kw {
+    if let ParserResult::Success(_)= return_kw {
       return self.expression();
     } else { return return_kw; }
   }
@@ -942,12 +971,12 @@ impl <'a>Parser<'a> {
       match &tok_entry.tok_type {
         Token::LParen(_) => {
           let l_paren = self.parse_tok(tokens::parens::LParen::start());
-          if let ParserResult::Success = l_paren {
+          if let ParserResult::Success(_)= l_paren {
             let expression = self.expression();
-            if let ParserResult::Success = expression {
+            if let ParserResult::Success(_)= expression {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
-              if let ParserResult::Success = r_paren {
-                return ParserResult::Success;
+              if let ParserResult::Success(_)= r_paren {
+                return r_paren;
               } else { return r_paren; }
             } else { return expression; }
           } else { return l_paren; }
@@ -971,24 +1000,26 @@ impl <'a>Parser<'a> {
     if let Some(tok_entry) = self.lexer.peek() {
       // if the next token matches the target, consume and return success result
       if mem::discriminant(&tok_entry.tok_type) == mem::discriminant(&target) {
-        self.lexer.next();
-      
-        return ParserResult::Success;
+        if let Some(tok_entry) = self.lexer.next() {
+          return ParserResult::Success(tok_entry);
+        } else {
+          return ParserResult::ErrUnexpectedEnd;
+        }
       } else { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from(target.get_example()), actual: String::from(&tok_entry.chars[..])}; }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
   // consume tokens until a semicolon is hit, and then consume the semicolon
-  pub fn resync(&mut self) {
+  pub fn resync(&mut self) -> ParserResult{
     let mut missed_semicolon = false;
     loop {
       let result = self.parse_tok(tokens::semicolon::Semicolon::start());
       
       match result {
-        ParserResult::Success => break,
+        ParserResult::Success(_) => return result,
         ParserResult::ErrUnexpectedEnd => {
           result.print();
-          break;
+          return result;
         },
         _ => {
           if !missed_semicolon {
@@ -1006,7 +1037,7 @@ impl <'a>Parser<'a> {
 pub enum ParserResult {
   ErrUnexpectedEnd,
   ErrUnexpectedTok{ expected: String, actual: String, line_num: u32},
-  Success,
+  Success(TokenEntry),
   Error{line_num: u32, msg: String}
 }
 
@@ -1016,7 +1047,7 @@ impl ParserResult {
       ParserResult::ErrUnexpectedEnd => { println!("Unexpected end of program."); },
       ParserResult::ErrUnexpectedTok{line_num, expected, actual} => { println!("({}) - Unexpected token - Expected: '{}', got: '{}'", line_num, expected, actual); },
       ParserResult::Error{line_num, msg} => { println!("({}) - Error: {}", line_num, msg); },
-      ParserResult::Success => { println!("Success"); }
+      ParserResult::Success(_) => { println!("Success"); }
     }
   }
 }
