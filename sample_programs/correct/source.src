@@ -4,6 +4,18 @@ variable i : integer;
 variable c : string;
 variable myArray : integer[15];
 
+type number is integer;
+
+procedure add_int: integer()
+begin
+
+end procedure;
+
+procedure add_float: float()
+begin
+
+end procedure;
+
 begin
 
 i := 100;
