@@ -3,6 +3,7 @@ Program MyTestProgram is
 variable i : integer;
 variable c : string;
 variable myArray : integer[15];
+variable d : float;
 
 type number is integer;
 

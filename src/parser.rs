@@ -152,7 +152,22 @@ impl <'a>Parser<'a> {
             // debugging - print contents of the table
             println!("printing members of this scope");
             for key in table.keys() {
-              println!("key: {}", key);
+              if let Some(value) = table.get(key) {
+                let type_str = match value.r#type {
+                  Type::None => "n/a",
+                  Type::Procedure => "procedure",
+                  Type::Type => "type",
+                  Type::Enum => "enum",
+                  Type::Integer => "integer",
+                  Type::Float => "float",
+                  Type::String => "string",
+                  Type::Bool => "bool",
+                  Type::Custom(_) => "custom"
+                };
+                
+                
+                println!("key: {} ({})", key, type_str);
+              }
             }
           }
           
@@ -407,7 +422,7 @@ impl <'a>Parser<'a> {
     let variable_kw = self.parse_tok(tokens::variable_kw::VariableKW::start());
     if let ParserResult::Success(_) = variable_kw {
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-      if let ParserResult::Success(variable_id) = identifier {
+      if let ParserResult::Success(mut variable_id) = identifier {
         let colon = self.parse_tok(tokens::colon::Colon::start());
         if let ParserResult::Success(_) = colon {
           let type_mark = self.type_mark();
@@ -421,7 +436,8 @@ impl <'a>Parser<'a> {
                 let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
                 if let ParserResult::Success(_) = r_bracket {
                 
-                  // TODO update the token type baed on the type_mark
+                  // update the token type baed on the type_mark
+                  variable_id.r#type = Parser::get_variable_type(&variable_type);
                 
                   // if successful, add the variable to the symbol table
                   self.add_symbol(scope, variable_id);
@@ -435,8 +451,8 @@ impl <'a>Parser<'a> {
               }
             }
             
-            // update the token type based on variable_type
-            //variable_id.r#type = Type::Variable;
+            // update the token type baed on the type_mark
+            variable_id.r#type = Parser::get_variable_type(&variable_type);
             
             // if successful without bounds, also add to symbol table
             self.add_symbol(scope, variable_id);
@@ -466,7 +482,7 @@ impl <'a>Parser<'a> {
         let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
         if let ParserResult::Success(_) = is_kw {
           let type_mark = self.type_mark();
-          if let ParserResult::Success(..) = type_mark {
+          if let ParserResult::Success(_) = type_mark {
           
             // change the token entry type
             type_id.r#type = Type::Type;
@@ -1049,6 +1065,18 @@ impl <'a>Parser<'a> {
         }
       }
     }
+  }
+  
+  // return type based on the type mark token
+  pub fn get_variable_type(variable_entry: &TokenEntry) -> Type {
+    return match variable_entry.tok_type {
+      Token::EnumKW(_) => Type::Enum,
+      Token::IntegerKW(_) => Type::Integer,
+      Token::FloatKW(_) => Type::Float,
+      Token::StringKW(_) => Type::String,
+      Token::BoolKW(_) => Type::Bool,
+      _ => Type::None
+    };
   }
   
   pub fn add_symbol(&mut self, scope: &Scope, tok_entry: TokenEntry) {
