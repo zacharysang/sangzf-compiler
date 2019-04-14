@@ -238,6 +238,14 @@ impl <'a>Parser<'a> {
             
                 // if header is successful, save procedure_id to the symbol table
                 self.add_symbol(scope, procedure_id);
+                
+                // create a new symbol table for the new scope
+                self.symbol_table_chain.push(HashMap::new());
+                
+                // TODO fix this so that procedure_id can be put into 2 scopes
+                // include procedure_id in this new symbol table as well (allow recursive calls)
+                //let procedure_scope = Scope::Local;
+                //self.add_symbol(&procedure_scope, procedure_id);
               
                 return r_paren;
               } else { r_paren.print(); return r_paren; }
@@ -353,9 +361,6 @@ impl <'a>Parser<'a> {
   }
   
   pub fn procedure_body(&mut self, scope: &Scope) -> ParserResult {
-  
-    // create a new symbol table for this scope
-    self.symbol_table_chain.push(HashMap::new());
   
     // TODO break this out to its own function
     // parse an optional number of declarations delimited by semicolon
