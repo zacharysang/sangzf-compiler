@@ -248,7 +248,7 @@ impl Token {
 
 pub enum Type {
   None,
-  Procedure(Box<Type>),
+  Procedure(Vec<Box<Type>>,Box<Type>),
   Type,
   Enum,
   Integer,
@@ -256,4 +256,39 @@ pub enum Type {
   String,
   Bool,
   Custom(String)
+}
+
+impl ToString for Type {
+  fn to_string(&self) -> String {
+    return match self {
+      Type::None => String::from("n/a"),
+      Type::Procedure(params, result) => {
+        
+        let mut params_str = String::new();
+        for param in params {
+          params_str.push_str(&(*param.to_string()));
+          params_str.push_str(",");
+        }
+        
+        let mut proc_str = String::new();
+        
+        println!("result type: {}", &(*result.to_string()));
+        
+        proc_str.push_str("procedure(");
+        proc_str.push_str(&params_str);
+        proc_str.push_str(") -> ");
+        proc_str.push_str(&result.to_string());
+        
+        String::from(proc_str)
+        
+      },
+      Type::Type => String::from("type"),
+      Type::Enum => String::from("enum"),
+      Type::Integer => String::from("integer"),
+      Type::Float => String::from("float"),
+      Type::String => String::from("string"),
+      Type::Bool => String::from("bool"),
+      Type::Custom(_) => String::from("custom")
+    };
+  }
 }

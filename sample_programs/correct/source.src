@@ -7,7 +7,7 @@ variable d : float;
 
 type number is integer;
 
-procedure add_int: integer()
+procedure add_int: integer(variable p1: integer, variable p2: float)
 	variable x : integer;
 	variable y : integer;
 	global variable z : float;

@@ -203,15 +203,17 @@ impl <'a>Parser<'a> {
         let colon = self.parse_tok(tokens::colon::Colon::start());
         if let ParserResult::Success(_) = colon {
           let type_mark = self.type_mark();
-          if let ParserResult::Success(procedure_type) = type_mark {
+          if let ParserResult::Success(result_type) = type_mark {
             let l_paren = self.parse_tok(tokens::parens::LParen::start());
             if let ParserResult::Success(_) = l_paren {
+            
+              let mut procedure_type = Type::Procedure(vec![], Box::new(Parser::get_type(&result_type)));
             
               // read optional parameter list
               let next_tok = self.lexer.peek();
               if let Some(tok_entry) = next_tok {
                 if let Token::VariableKW(_) = &tok_entry.tok_type {
-                  self.parameter_list(scope);
+                  self.parameter_list(scope, &mut procedure_type);
                 }
               }
               
@@ -219,8 +221,8 @@ impl <'a>Parser<'a> {
               if let ParserResult::Success(_) = r_paren {
             
                 // set the type of token to procedure
-                let result_type = Parser::get_variable_type(&procedure_type);
-                procedure_id.r#type = Type::Procedure(Box::new(result_type));
+                let result_type = Parser::get_type(&result_type);
+                procedure_id.r#type = procedure_type;
             
                 // Note: Using Rc struct gives immutable multiple ownership
                 // this means that the symbols in the table are immutable
@@ -327,16 +329,23 @@ impl <'a>Parser<'a> {
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn parameter_list(&mut self, scope: &Scope) -> ParserResult {
+  pub fn parameter_list(&mut self, scope: &Scope, procedure: &mut Type) -> ParserResult {
     
     let parameter = self.parameter(scope);
-    if let ParserResult::Success(_) = parameter {
+    if let ParserResult::Success(param_entry) = &parameter {
+    
+      // add this parameter type to the procedure type
+      if let Type::Procedure(param_types, _) = procedure {
+        param_types.push(Box::new(Parser::get_type(&param_entry)));
+      } else {
+        println!("Hmmm. non-Type::Procedure type passed into parameter_list");
+      }
       
       // optionally parse another parameter list (delimited by comma)
       let comma = self.parse_tok(tokens::comma::Comma::start());
       if let ParserResult::Success(_) = comma {
         // call recursively to parse the rest of the list
-        return self.parameter_list(scope);
+        return self.parameter_list(scope, procedure);
       } else {
         return parameter;
       }
@@ -438,12 +447,12 @@ impl <'a>Parser<'a> {
                 if let ParserResult::Success(_) = r_bracket {
                 
                   // update the token type baed on the type_mark
-                  variable_id.r#type = Parser::get_variable_type(&variable_type);
+                  variable_id.r#type = Parser::get_type(&variable_type);
                 
                   // if successful, add the variable to the symbol table
                   self.add_symbol(scope, Rc::new(variable_id));
                 
-                  return r_bracket;
+                  return ParserResult::Success(variable_type);
                 } else {
                   return r_bracket;
                 }
@@ -453,12 +462,12 @@ impl <'a>Parser<'a> {
             }
             
             // update the token type baed on the type_mark
-            variable_id.r#type = Parser::get_variable_type(&variable_type);
+            variable_id.r#type = Parser::get_type(&variable_type);
             
             // if successful without bounds, also add to symbol table
             self.add_symbol(scope, Rc::new(variable_id));
             
-            return ParserResult::Success(TokenEntry::none_tok());
+            return ParserResult::Success(variable_type);
             
           } else { return type_mark; }
         } else { return colon; }
@@ -1069,7 +1078,7 @@ impl <'a>Parser<'a> {
   }
   
   // return type based on the type mark token
-  pub fn get_variable_type(variable_entry: &TokenEntry) -> Type {
+  pub fn get_type(variable_entry: &TokenEntry) -> Type {
     return match variable_entry.tok_type {
       Token::EnumKW(_) => Type::Enum,
       Token::IntegerKW(_) => Type::Integer,
@@ -1099,18 +1108,7 @@ impl <'a>Parser<'a> {
     // debugging - print contents of the table
     for key in table.keys() {
       if let Some(value) = table.get(key) {
-        let type_str = match value.r#type {
-          Type::None => "n/a",
-          Type::Procedure(_) => "procedure",
-          Type::Type => "type",
-          Type::Enum => "enum",
-          Type::Integer => "integer",
-          Type::Float => "float",
-          Type::String => "string",
-          Type::Bool => "bool",
-          Type::Custom(_) => "custom"
-        };
-        
+        let type_str = value.r#type.to_string();
         
         println!("key: {} ({})", key, type_str);
       }
