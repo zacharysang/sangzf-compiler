@@ -438,16 +438,21 @@ impl <'a>Parser<'a> {
           let type_mark = self.type_mark();
           if let ParserResult::Success(variable_type) = type_mark {
             
-            // optionally parse a bound
+            // optionally parse a bound (making this variable an array)
             let l_bracket = self.parse_tok(tokens::brackets::LBracket::start());
             if let ParserResult::Success(_) = l_bracket {
               let bound = self.bound();
-              if let ParserResult::Success(_) = bound {
+              if let ParserResult::Success(bound_entry) = bound {
                 let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
                 if let ParserResult::Success(_) = r_bracket {
                 
                   // update the token type baed on the type_mark
-                  variable_id.r#type = Parser::get_type(&variable_type);
+                  let arr_type = Parser::get_type(&variable_type);
+                  let arr_size = match bound_entry.chars.parse::<u32>() {
+                    Ok(val) => val,
+                    Err(_) => 0
+                  };
+                  variable_id.r#type = Type::Array(Box::new(arr_type), arr_size);
                 
                   // if successful, add the variable to the symbol table
                   self.add_symbol(scope, Rc::new(variable_id));

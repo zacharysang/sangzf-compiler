@@ -255,6 +255,7 @@ pub enum Type {
   Float,
   String,
   Bool,
+  Array(Box<Type>, u32),
   Custom(String)
 }
 
@@ -272,8 +273,6 @@ impl ToString for Type {
         
         let mut proc_str = String::new();
         
-        println!("result type: {}", &(*result.to_string()));
-        
         proc_str.push_str("procedure(");
         proc_str.push_str(&params_str);
         proc_str.push_str(") -> ");
@@ -288,7 +287,18 @@ impl ToString for Type {
       Type::Float => String::from("float"),
       Type::String => String::from("string"),
       Type::Bool => String::from("bool"),
-      Type::Custom(_) => String::from("custom")
+      Type::Array(el_type, size) => {
+        let mut array_str = String::from("array(");
+        
+        array_str.push_str(&el_type.to_string());
+        array_str.push_str(")[");
+        array_str.push_str(&size.to_string());
+        array_str.push_str("]");
+        
+        array_str
+        
+      },
+      Type::Custom(_) => String::from("custom"),
     };
   }
 }
