@@ -158,7 +158,7 @@ impl <'a>Parser<'a> {
               if let Some(value) = table.get(key) {
                 let type_str = match value.r#type {
                   Type::None => "n/a",
-                  Type::Procedure => "procedure",
+                  Type::Procedure(_) => "procedure",
                   Type::Type => "type",
                   Type::Enum => "enum",
                   Type::Integer => "integer",
@@ -221,7 +221,7 @@ impl <'a>Parser<'a> {
         let colon = self.parse_tok(tokens::colon::Colon::start());
         if let ParserResult::Success(_) = colon {
           let type_mark = self.type_mark();
-          if let ParserResult::Success(_) = type_mark {
+          if let ParserResult::Success(procedure_type) = type_mark {
             let l_paren = self.parse_tok(tokens::parens::LParen::start());
             if let ParserResult::Success(_) = l_paren {
             
@@ -237,7 +237,8 @@ impl <'a>Parser<'a> {
               if let ParserResult::Success(_) = r_paren {
             
                 // set the type of token to procedure
-                procedure_id.r#type = Type::Procedure;
+                let result_type = Parser::get_variable_type(&procedure_type);
+                procedure_id.r#type = Type::Procedure(Box::new(result_type));
             
                 // Note: Using Rc struct gives immutable multiple ownership
                 // this means that the symbols in the table are immutable
@@ -430,7 +431,7 @@ impl <'a>Parser<'a> {
               if let Some(value) = table.get(key) {
                 let type_str = match value.r#type {
                   Type::None => "n/a",
-                  Type::Procedure => "procedure",
+                  Type::Procedure(_) => "procedure",
                   Type::Type => "type",
                   Type::Enum => "enum",
                   Type::Integer => "integer",

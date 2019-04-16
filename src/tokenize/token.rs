@@ -248,7 +248,7 @@ impl Token {
 
 pub enum Type {
   None,
-  Procedure,
+  Procedure(Box<Type>),
   Type,
   Enum,
   Integer,
