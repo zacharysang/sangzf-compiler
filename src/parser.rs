@@ -2,6 +2,7 @@ use std::iter::Peekable;
 use std::str::Chars;
 use std::collections::HashMap;
 use std::mem;
+use std::rc::Rc;
 
 use crate::tokenize::lexable::Lexable;
 use crate::lexer::Lexer;
@@ -13,8 +14,8 @@ use crate::tokens;
 
 pub struct Parser<'a> {
   pub lexer: Peekable<Lexer<'a>>,
-  pub symbol_table_chain: Vec<HashMap<String, TokenEntry>>,
-  pub global_symbol_table: HashMap<String, TokenEntry>
+  pub symbol_table_chain: Vec<HashMap<String, Rc<TokenEntry>>>,
+  pub global_symbol_table: HashMap<String, Rc<TokenEntry>>
 }
 
 impl <'a>Parser<'a> {
@@ -41,6 +42,9 @@ impl <'a>Parser<'a> {
   */
   
   pub fn program(&mut self) -> ParserResult {
+  
+    // create a global symbol table
+    self.symbol_table_chain.push(HashMap::new());
     
     let program_header = self.program_header();
     if let ParserResult::Success(_) = program_header {
@@ -150,7 +154,6 @@ impl <'a>Parser<'a> {
           // debugging - check the values in this scope
           if let Some(table) = popped_table {
             // debugging - print contents of the table
-            println!("printing members of this scope");
             for key in table.keys() {
               if let Some(value) = table.get(key) {
                 let type_str = match value.r#type {
@@ -236,16 +239,22 @@ impl <'a>Parser<'a> {
                 // set the type of token to procedure
                 procedure_id.r#type = Type::Procedure;
             
+                // Note: Using Rc struct gives immutable multiple ownership
+                // this means that the symbols in the table are immutable
+                // may want to mutate to change the type, chars, tok_type of a symbol
+                // but I believe this language does not require this since this information is given completely at declaration
+                
                 // if header is successful, save procedure_id to the symbol table
-                self.add_symbol(scope, procedure_id);
+                let procedure_symbol = Rc::new(procedure_id);
+                
+                self.add_symbol(scope, Rc::clone(&procedure_symbol));
                 
                 // create a new symbol table for the new scope
                 self.symbol_table_chain.push(HashMap::new());
                 
-                // TODO fix this so that procedure_id can be put into 2 scopes
                 // include procedure_id in this new symbol table as well (allow recursive calls)
-                //let procedure_scope = Scope::Local;
-                //self.add_symbol(&procedure_scope, procedure_id);
+                let procedure_scope = Scope::Local;
+                self.add_symbol(&procedure_scope, Rc::clone(&procedure_symbol));
               
                 return r_paren;
               } else { r_paren.print(); return r_paren; }
@@ -413,7 +422,31 @@ impl <'a>Parser<'a> {
         if let ParserResult::Success(_) = procedure_kw {
         
           // leave the current scope
-          self.symbol_table_chain.pop();
+          let popped_scope = self.symbol_table_chain.pop();
+          
+          if let Some(table) = popped_scope {
+            // debugging - print contents of the table
+            for key in table.keys() {
+              if let Some(value) = table.get(key) {
+                let type_str = match value.r#type {
+                  Type::None => "n/a",
+                  Type::Procedure => "procedure",
+                  Type::Type => "type",
+                  Type::Enum => "enum",
+                  Type::Integer => "integer",
+                  Type::Float => "float",
+                  Type::String => "string",
+                  Type::Bool => "bool",
+                  Type::Custom(_) => "custom"
+                };
+                
+                
+                println!("procedure variable: {} ({})", key, type_str);
+              }
+            }
+            
+            println!("\n");
+          }
         
           return procedure_kw;
           
@@ -445,7 +478,7 @@ impl <'a>Parser<'a> {
                   variable_id.r#type = Parser::get_variable_type(&variable_type);
                 
                   // if successful, add the variable to the symbol table
-                  self.add_symbol(scope, variable_id);
+                  self.add_symbol(scope, Rc::new(variable_id));
                 
                   return r_bracket;
                 } else {
@@ -460,7 +493,7 @@ impl <'a>Parser<'a> {
             variable_id.r#type = Parser::get_variable_type(&variable_type);
             
             // if successful without bounds, also add to symbol table
-            self.add_symbol(scope, variable_id);
+            self.add_symbol(scope, Rc::new(variable_id));
             
             return ParserResult::Success(TokenEntry::none_tok());
             
@@ -492,7 +525,7 @@ impl <'a>Parser<'a> {
             // change the token entry type
             type_id.r#type = Type::Type;
             
-            self.add_symbol(scope, type_id);
+            self.add_symbol(scope, Rc::new(type_id));
           
             return type_mark;
           } else { return type_mark; }
@@ -1084,7 +1117,7 @@ impl <'a>Parser<'a> {
     };
   }
   
-  pub fn add_symbol(&mut self, scope: &Scope, tok_entry: TokenEntry) {
+  pub fn add_symbol(&mut self, scope: &Scope, tok_entry: Rc<TokenEntry>) {
     match scope {
       Scope::Local => {
         if let Some(table) = self.symbol_table_chain.last_mut() {

@@ -1,6 +1,6 @@
 Program MyTestProgram is
 
-variable i : integer;
+global variable i : integer;
 variable c : string;
 variable myArray : integer[15];
 variable d : float;
@@ -8,11 +8,20 @@ variable d : float;
 type number is integer;
 
 procedure add_int: integer()
+	variable x : integer;
+	variable y : integer;
+	global variable z : float;
+	global procedure inside_add_int: bool()
+	begin
+	end procedure;
+	
 begin
 
 end procedure;
 
+
 procedure add_float: float()
+	variable q : float;
 begin
 
 end procedure;
