@@ -153,25 +153,7 @@ impl <'a>Parser<'a> {
           
           // debugging - check the values in this scope
           if let Some(table) = popped_table {
-            // debugging - print contents of the table
-            for key in table.keys() {
-              if let Some(value) = table.get(key) {
-                let type_str = match value.r#type {
-                  Type::None => "n/a",
-                  Type::Procedure(_) => "procedure",
-                  Type::Type => "type",
-                  Type::Enum => "enum",
-                  Type::Integer => "integer",
-                  Type::Float => "float",
-                  Type::String => "string",
-                  Type::Bool => "bool",
-                  Type::Custom(_) => "custom"
-                };
-                
-                
-                println!("key: {} ({})", key, type_str);
-              }
-            }
+            Parser::print_symbol_table(&table);
           }
           
         
@@ -426,27 +408,7 @@ impl <'a>Parser<'a> {
           let popped_scope = self.symbol_table_chain.pop();
           
           if let Some(table) = popped_scope {
-            // debugging - print contents of the table
-            for key in table.keys() {
-              if let Some(value) = table.get(key) {
-                let type_str = match value.r#type {
-                  Type::None => "n/a",
-                  Type::Procedure(_) => "procedure",
-                  Type::Type => "type",
-                  Type::Enum => "enum",
-                  Type::Integer => "integer",
-                  Type::Float => "float",
-                  Type::String => "string",
-                  Type::Bool => "bool",
-                  Type::Custom(_) => "custom"
-                };
-                
-                
-                println!("procedure variable: {} ({})", key, type_str);
-              }
-            }
-            
-            println!("\n");
+            Parser::print_symbol_table(&table);
           }
         
           return procedure_kw;
@@ -1131,6 +1093,31 @@ impl <'a>Parser<'a> {
         }
       },
     }
+  }
+  
+  fn print_symbol_table(table: &HashMap<String, Rc<TokenEntry>>) {
+    // debugging - print contents of the table
+    for key in table.keys() {
+      if let Some(value) = table.get(key) {
+        let type_str = match value.r#type {
+          Type::None => "n/a",
+          Type::Procedure(_) => "procedure",
+          Type::Type => "type",
+          Type::Enum => "enum",
+          Type::Integer => "integer",
+          Type::Float => "float",
+          Type::String => "string",
+          Type::Bool => "bool",
+          Type::Custom(_) => "custom"
+        };
+        
+        
+        println!("key: {} ({})", key, type_str);
+      }
+    }
+    
+    println!("\n");
+    
   }
   
 }
