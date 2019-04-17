@@ -188,8 +188,8 @@ impl <'a>Parser<'a> {
   
   pub fn procedure_declaration(&mut self, scope: &Scope) -> ParserResult {
     let procedure_header = self.procedure_header(scope);
-    if let ParserResult::Success(procedure_id) = procedure_header {
-      let procedure_body = self.procedure_body(scope, &procedure_id.r#type);
+    if let ParserResult::Success(return_type) = procedure_header {
+      let procedure_body = self.procedure_body(scope, &return_type.r#type);
       if let ParserResult::Success(_) = procedure_body {
         return procedure_body;
       } else { procedure_body.print(); return procedure_body;}
@@ -209,7 +209,11 @@ impl <'a>Parser<'a> {
             let l_paren = self.parse_tok(tokens::parens::LParen::start());
             if let ParserResult::Success(_) = l_paren {
             
-              let mut procedure_type = Type::Procedure(vec![], Box::new(Parser::get_type(&result_type)));
+              let return_type = Parser::get_type(&result_type);
+              let mut procedure_type = Type::Procedure(vec![], Box::new(return_type));
+              
+              // create a new symbol table for the procedure scope
+              self.symbol_table_chain.push(HashMap::new());
             
               // read optional parameter list
               let next_tok = self.lexer.peek();
@@ -223,9 +227,8 @@ impl <'a>Parser<'a> {
               if let ParserResult::Success(_) = r_paren {
             
                 // set the type of token to procedure
-                let result_type = Parser::get_type(&result_type);
                 procedure_id.r#type = procedure_type;
-            
+                
                 // Note: Using Rc struct gives immutable multiple ownership
                 // this means that the symbols in the table are immutable
                 // may want to mutate to change the type, chars, tok_type of a symbol
@@ -234,16 +237,22 @@ impl <'a>Parser<'a> {
                 // if header is successful, save procedure_id to the symbol table
                 let procedure_symbol = Rc::new(procedure_id);
                 
-                self.add_symbol(scope, Rc::clone(&procedure_symbol));
-                
-                // create a new symbol table for the new scope
-                self.symbol_table_chain.push(HashMap::new());
-                
-                // include procedure_id in this new symbol table as well (allow recursive calls)
+                // include procedure_id in this new symbol table (allow recursive calls)
                 let procedure_scope = Scope::Local;
                 self.add_symbol(&procedure_scope, Rc::clone(&procedure_symbol));
+                
+                // add procedure_id to the containing scope (pop procedure scope off then push back)
+                if let Scope::Local = &scope {
+                  if let Some(procedure_table) = self.symbol_table_chain.pop() {
+                    self.add_symbol(&scope, Rc::clone(&procedure_symbol));
+                    self.symbol_table_chain.push(procedure_table);
+                  }
+                } else if let Scope::Global = &scope {
+                  self.add_symbol(&scope, Rc::clone(&procedure_symbol));
+                }
               
-                return ParserResult::Success(procedure_id);
+                return ParserResult::Success(result_type);
+                
               } else { r_paren.print(); return r_paren; }
             } else { l_paren.print(); return l_paren; }
           } else { type_mark.print(); return type_mark; }
@@ -514,20 +523,14 @@ impl <'a>Parser<'a> {
     
   }
   
-  pub fn statement(&mut self, procedure_type: &Type) -> ParserResult {
-  
-    let ret_type = match procedure_type {
-      Type::Procedure(_, result_type) => result_type,
-      _ => return ParserResult::Error{line_num: 0, msg: String::from("Statement procedure type is not a procedure")}
-    };
-    
+  pub fn statement(&mut self, return_type: &Type) -> ParserResult {
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = peek_tok {
       match &tok_entry.tok_type {
         Token::Identifier(_) => { return self.assignment_statement(); },
-        Token::IfKW(_) => { return self.if_statement(procedure_type); },
-        Token::ForKW(_) => { return self.loop_statement(procedure_type); },
-        Token::ReturnKW(_) => { return self.return_statement(procedure_type); },
+        Token::IfKW(_) => { return self.if_statement(return_type); },
+        Token::ForKW(_) => { return self.loop_statement(return_type); },
+        Token::ReturnKW(_) => { return self.return_statement(return_type); },
         _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(<identifier>|if|for|return)"), actual: String::from(&tok_entry.chars[..])} }
       }
     } else { return ParserResult::ErrUnexpectedEnd; }
@@ -896,7 +899,7 @@ impl <'a>Parser<'a> {
     } else { return identifier; }
   }
   
-  pub fn if_statement(&mut self, procedure_type: &Type) -> ParserResult {
+  pub fn if_statement(&mut self, return_type: &Type) -> ParserResult {
     let if_kw = self.parse_tok(tokens::if_kw::IfKW::start());
     if let ParserResult::Success(_) = if_kw {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
@@ -917,7 +920,7 @@ impl <'a>Parser<'a> {
                   match tok_entry.tok_type {
                     Token::ElseKW(_) | Token::EndKW(_) => break,
                     _ => {
-                      let statement = self.statement(procedure_type);
+                      let statement = self.statement(return_type);
                       if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                         statement.print();
                       } 
@@ -939,7 +942,7 @@ impl <'a>Parser<'a> {
                     match tok_entry.tok_type {
                       Token::EndKW(_) => break,
                       _ => {
-                        let statement = self.statement(procedure_type);
+                        let statement = self.statement(return_type);
                         if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                           statement.print();
                         } 
@@ -966,7 +969,7 @@ impl <'a>Parser<'a> {
     } else { return if_kw; }
   }
   
-  pub fn loop_statement(&mut self, procedure_type: &Type) -> ParserResult {
+  pub fn loop_statement(&mut self, return_type: &Type) -> ParserResult {
     let for_kw = self.parse_tok(tokens::for_kw::ForKW::start());
     if let ParserResult::Success(_) = for_kw {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
@@ -989,7 +992,7 @@ impl <'a>Parser<'a> {
                     match tok_entry.tok_type {
                       Token::EndKW(_) => break,
                       _ => {
-                        let statement = self.statement(procedure_type);
+                        let statement = self.statement(return_type);
                         if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                           statement.print();
                         }
@@ -1013,10 +1016,10 @@ impl <'a>Parser<'a> {
     } else { return for_kw; }
   }
   
-  pub fn return_statement(&mut self, procedure_type: &Type) -> ParserResult {
+  pub fn return_statement(&mut self, return_type: &Type) -> ParserResult {
     let return_kw = self.parse_tok(tokens::return_kw::ReturnKW::start());
     if let ParserResult::Success(_) = return_kw {
-      return self.expression(procedure_type);
+      return self.expression(return_type);
     } else { return return_kw; }
   }
 
