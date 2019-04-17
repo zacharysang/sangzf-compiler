@@ -128,6 +128,7 @@ impl <'a>Parser<'a> {
           match &tok_entry.tok_type {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
               // if able to parse a statement, parse a terminating semicolon
+              // program doesn't have a return type so neither program statements
               let statement = self.statement(&Type::None);
               if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                 statement.print();
@@ -208,7 +209,6 @@ impl <'a>Parser<'a> {
             let l_paren = self.parse_tok(tokens::parens::LParen::start());
             if let ParserResult::Success(_) = l_paren {
             
-              // TODO param list included in the type instead of empty vec
               let mut procedure_type = Type::Procedure(vec![], Box::new(Parser::get_type(&result_type)));
             
               // read optional parameter list
@@ -540,6 +540,7 @@ impl <'a>Parser<'a> {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
       if let ParserResult::Success(_) = l_paren {
         
+        // TODO pass the param list here instead of an empty vec
         // parse optional argument list
         self.argument_list(vec![].iter());
         
@@ -835,6 +836,7 @@ impl <'a>Parser<'a> {
   
   pub fn argument_list(&mut self, mut param_types: Iter<Box<Type>>) -> ParserResult {
   
+    // compare arguments to procedure parameters
     let curr_arg_type;
     if let Some(param_type) = param_types.next() {
       curr_arg_type = param_type;
