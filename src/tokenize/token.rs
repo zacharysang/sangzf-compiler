@@ -246,6 +246,7 @@ impl Token {
   }
 }
 
+#[derive(Clone)]
 pub enum Type {
   None,
   Procedure(Vec<Box<Type>>,Box<Type>),
