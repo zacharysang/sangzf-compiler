@@ -24,6 +24,10 @@ begin
 
 end procedure;
 
+procedure ret_true: bool()
+begin 
+return true;
+end procedure;
 
 procedure add_float: float()
 	variable q : float;
@@ -35,6 +39,7 @@ begin
 
 i := 100;
 c := "A";
+d := ret_true();
 
 if(i > 100) then
 //do something#

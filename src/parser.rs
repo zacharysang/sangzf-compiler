@@ -536,30 +536,43 @@ impl <'a>Parser<'a> {
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn procedure_call_w_identifier(&mut self, identifier: ParserResult) -> ParserResult {
+  pub fn procedure_call_w_identifier(&mut self, identifier: ParserResult, resolve_type: &Type) -> ParserResult {
     if let ParserResult::Success(procedure_id) = identifier {
-    
     
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
       if let ParserResult::Success(_) = l_paren {
         
-        // look up the procedure parameters
+        // look up the procedure
         let procedure = match self.get_symbol(&procedure_id.chars) {
           Some(val) => val,
           None => return ParserResult::ErrSymbolNotFound{name: String::from(&procedure_id.chars[..]), line_num: procedure_id.line_num}
         };
         
-        let procedure_params = match &procedure.r#type {
-          Type::Procedure(params, _) => params.clone(),
-          _ => return ParserResult::ErrInvalidType{line_num: procedure_id.line_num, expected: Type::Procedure(vec![], Box::new(Type::None)), actual: procedure.r#type.clone()}
+        // check that the retrieved symbol is a procedure
+        let (procedure_params, procedure_ret) = match &procedure.r#type {
+          Type::Procedure(params, ret) => (params.clone(), *ret.clone()),
+          _ => return ParserResult::ErrInvalidType{line_num: procedure_id.line_num,
+                                                    expected: vec![Type::Procedure(vec![], Box::new(Type::None))],
+                                                    actual: procedure.r#type.clone()}
         };
         
-        // parse optional argument list
-        let procedure_params_iter = procedure_params.iter();
-        self.argument_list(procedure_params_iter);
+        // parse optional argument list (includes checking types)
+        self.argument_list(procedure_params.iter());
         
         let r_paren = self.parse_tok(tokens::parens::RParen::start());
         if let ParserResult::Success(_) = r_paren {
+        
+          // check that the return type is compatible
+          let compatible = Parser::is_compatible(resolve_type, &procedure_ret);
+          if compatible {
+            // procedure return type is compatible with the type it is expected to resolve to
+          } else {
+            // incompatible types return error result
+            return ParserResult::ErrInvalidType{line_num: procedure_id.line_num,
+                                                expected: vec![resolve_type.clone()],
+                                                actual: procedure_ret};
+          }
+        
           return r_paren;
         } else { return r_paren; }
       } else { return l_paren; }
@@ -567,10 +580,10 @@ impl <'a>Parser<'a> {
   }
   
   // this is currently unused since procedure calls currently only occur ambiguously with names (in the factor parse rule)
-  pub fn procedure_call(&mut self) -> ParserResult {
+  pub fn procedure_call(&mut self, resolve_type: &Type) -> ParserResult {
   
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-    return self.procedure_call_w_identifier(identifier);
+    return self.procedure_call_w_identifier(identifier, resolve_type);
     
   }
   
@@ -934,7 +947,7 @@ impl <'a>Parser<'a> {
                       let statement = self.statement(return_type);
                       if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
                         statement.print();
-                      } 
+                      }
                       
                       self.resync();
                     }
@@ -1034,7 +1047,7 @@ impl <'a>Parser<'a> {
     } else { return return_kw; }
   }
 
-  pub fn procedure_call_or_name(&mut self) -> ParserResult {
+  pub fn procedure_call_or_name(&mut self, resolve_type: &Type) -> ParserResult {
     // this could be a procedure call or a name based on the next token
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
     
@@ -1042,7 +1055,7 @@ impl <'a>Parser<'a> {
     
     if let Some(tok_entry) = &peek_tok {
       if let Token::LParen(_) = &tok_entry.tok_type {
-        return self.procedure_call_w_identifier(identifier);
+        return self.procedure_call_w_identifier(identifier, resolve_type);
       }
     }
     
@@ -1071,6 +1084,7 @@ impl <'a>Parser<'a> {
     if let Some(tok_entry) = &peek_tok {
       match &tok_entry.tok_type {
         Token::LParen(_) => {
+          // resolve to a subexpression
           let l_paren = self.parse_tok(tokens::parens::LParen::start());
           if let ParserResult::Success(_) = l_paren {
             let expression = self.expression(resolve_type);
@@ -1082,7 +1096,18 @@ impl <'a>Parser<'a> {
             } else { return expression; }
           } else { return l_paren; }
         },
-        Token::Identifier(_) => { return self.procedure_call_or_name(); },
+        Token::Identifier(_) => { 
+          
+          let result = self.procedure_call_or_name(resolve_type);
+          
+          // resolve to the result of a procedure call
+          if let ParserResult::Success(_) = result {
+            return result;
+          } else {
+            result.print();
+            return result;
+          }
+        },
         Token::Dash(_) => {
           // this could be a name or number depending on the next token
           return self.name_or_number();
@@ -1178,7 +1203,43 @@ impl <'a>Parser<'a> {
         if let Some(table) = self.symbol_table_chain.first_mut() {
           table.insert(String::from(&tok_entry.chars[..]), tok_entry);
         }
+      }
+    }
+  }
+  
+  fn is_compatible(expected_type: &Type, actual_type: &Type) -> bool {
+    match expected_type {
+      Type::Integer => {
+        if let Type::Float | Type::Integer | Type::Bool = actual_type {
+          return true;
+        } else {
+          return false;
+        }
       },
+      Type::Float => {
+        if let Type::Float | Type:: Integer = actual_type {
+          return true;
+        } else {
+          return false;
+        }
+      },
+      Type::Bool => {
+        if let Type::Bool | Type::Integer = actual_type {
+          return true;
+        } else {
+          return false;
+        }
+      },
+      Type::Array(expected_el_type, expected_length) => {
+        if let Type::Array(actual_el_type, actual_length) = actual_type {
+          return (expected_length == actual_length) && Parser::is_compatible(expected_el_type, actual_el_type);
+        } else {
+          return false;
+        }
+      },
+      _ => {
+        return mem::discriminant(expected_type) == mem::discriminant(actual_type);
+      }
     }
   }
   
@@ -1203,7 +1264,7 @@ pub enum ParserResult {
   ErrUnexpectedEnd,
   ErrUnexpectedTok{ expected: String, actual: String, line_num: u32},
   ErrSymbolNotFound{name: String, line_num: u32},
-  ErrInvalidType{line_num: u32, expected: Type, actual: Type},
+  ErrInvalidType{line_num: u32, expected: Vec<Type>, actual: Type},
   Error{line_num: u32, msg: String},
   Success(TokenEntry),
 }
@@ -1214,7 +1275,14 @@ impl ParserResult {
       ParserResult::ErrUnexpectedEnd => println!("Unexpected end of program."),
       ParserResult::ErrUnexpectedTok{line_num, expected, actual} => println!("({}) - Unexpected token - Expected: '{}', got: '{}'", line_num, expected, actual),
       ParserResult::ErrSymbolNotFound{line_num, name} => println!("({}) - Symbol undefined: '{}'", line_num, name),
-      ParserResult::ErrInvalidType{line_num, expected, actual} => println!("({}) - Unexpected type: '{}', expected: '{}'", line_num, actual.to_string(), expected.to_string()),
+      ParserResult::ErrInvalidType{line_num, expected, actual} => {
+        let mut expected_str = String::new();
+        for r#type in expected {
+          expected_str.push_str(&r#type.to_string()[..]);
+          expected_str.push_str(", ");
+        }
+        println!("({}) - Unexpected type: '{}', expected: '{}'", line_num, actual.to_string(), expected_str);
+      },
       ParserResult::Error{line_num, msg} => println!("({}) - Error: {}", line_num, msg),
       ParserResult::Success(_) => println!("Success")
     }
