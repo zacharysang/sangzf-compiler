@@ -39,16 +39,17 @@ begin
 
 i := 100;
 c := "A";
-d := ret_true();
 
 if(i > 100) then
 //do something#
-	i:= 1110;
+	i:= 1110 + 6;
+	c:= 1 < 2 + 1;
 else
 	i:= 3000;
 end if;
 
 for (a:=0; 1==1)
+	//c := 1+(12 < 0);
 	i := 50;
 end for;
 
