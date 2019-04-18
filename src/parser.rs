@@ -457,7 +457,7 @@ impl <'a>Parser<'a> {
                 let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
                 if let ParserResult::Success(_) = r_bracket {
                 
-                  // update the token type baed on the type_mark
+                  // update the token type based on the type_mark
                   let arr_type = Parser::get_type(&variable_type);
                   let arr_size = match bound_entry.chars.parse::<u32>() {
                     Ok(val) => val,
@@ -543,9 +543,20 @@ impl <'a>Parser<'a> {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
       if let ParserResult::Success(_) = l_paren {
         
-        // TODO pass the param list here instead of an empty vec
+        // look up the procedure parameters
+        let procedure = match self.get_symbol(&procedure_id.chars) {
+          Some(val) => val,
+          None => return ParserResult::ErrSymbolNotFound{name: String::from(&procedure_id.chars[..]), line_num: procedure_id.line_num}
+        };
+        
+        let procedure_params = match &procedure.r#type {
+          Type::Procedure(params, _) => params.clone(),
+          _ => return ParserResult::ErrInvalidType{line_num: procedure_id.line_num, expected: Type::Procedure(vec![], Box::new(Type::None)), actual: procedure.r#type.clone()}
+        };
+        
         // parse optional argument list
-        self.argument_list(vec![].iter());
+        let procedure_params_iter = procedure_params.iter();
+        self.argument_list(procedure_params_iter);
         
         let r_paren = self.parse_tok(tokens::parens::RParen::start());
         if let ParserResult::Success(_) = r_paren {
@@ -865,8 +876,8 @@ impl <'a>Parser<'a> {
     
       // look up the destination in the symbol table to retrieve the type
       let dest_type = match self.get_symbol(&dest_id.chars) {
-        Ok(entry) => entry.r#type.clone(),
-        Err(_) => return ParserResult::ErrSymbolNotFound{name: dest_id.chars, line_num: dest_id.line_num}
+        Some(entry) => entry.r#type.clone(),
+        None => return ParserResult::ErrSymbolNotFound{name: dest_id.chars, line_num: dest_id.line_num}
       };
       
       let assign = self.parse_tok(tokens::assign::Assign::start());
@@ -1134,25 +1145,25 @@ impl <'a>Parser<'a> {
     };
   }
   
-  pub fn get_symbol(&self, name: &String) -> Result<&TokenEntry, ()> {
+  pub fn get_symbol(&self, name: &String) -> Option<&TokenEntry> {
     // check the local table
     if let Some(local_table) = self.symbol_table_chain.last() {
       if let Some(symbol) = local_table.get(name) {
-        return Ok(symbol);
+        return Some(symbol);
       } else if let Some(global_table) = self.symbol_table_chain.first() {
         if let Some(symbol) = global_table.get(name) {
-          return Ok(symbol);
+          return Some(symbol);
         } else {
           println!("Symbol not found: '{}'", name);
-          return Err(());
+          return None;
         }
       } else {
         println!("Hmm. Symbol table not found");
-        return Err(());
+        return None;
       }
     } else {
       println!("Hmm. Symbol table not found");
-      return Err(());
+      return None;
     }
   }
   
@@ -1192,6 +1203,7 @@ pub enum ParserResult {
   ErrUnexpectedEnd,
   ErrUnexpectedTok{ expected: String, actual: String, line_num: u32},
   ErrSymbolNotFound{name: String, line_num: u32},
+  ErrInvalidType{line_num: u32, expected: Type, actual: Type},
   Error{line_num: u32, msg: String},
   Success(TokenEntry),
 }
@@ -1201,7 +1213,8 @@ impl ParserResult {
     match self {
       ParserResult::ErrUnexpectedEnd => println!("Unexpected end of program."),
       ParserResult::ErrUnexpectedTok{line_num, expected, actual} => println!("({}) - Unexpected token - Expected: '{}', got: '{}'", line_num, expected, actual),
-      ParserResult::ErrSymbolNotFound{name, line_num} => println!("({}) - Symbol undefined: '{}'", line_num, name),
+      ParserResult::ErrSymbolNotFound{line_num, name} => println!("({}) - Symbol undefined: '{}'", line_num, name),
+      ParserResult::ErrInvalidType{line_num, expected, actual} => println!("({}) - Unexpected type: '{}', expected: '{}'", line_num, actual.to_string(), expected.to_string()),
       ParserResult::Error{line_num, msg} => println!("({}) - Error: {}", line_num, msg),
       ParserResult::Success(_) => println!("Success")
     }
