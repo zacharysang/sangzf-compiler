@@ -1,6 +1,7 @@
 Program MyTestProgram is
 
 global variable i : integer;
+variable a : integer;
 variable c : string;
 variable myArray : integer[15];
 variable d : float;
@@ -15,10 +16,18 @@ procedure add_int: integer(variable p1: integer, variable p2: float)
 	begin
 	end procedure;
 	
+	procedure inside_add_int2: bool(variable num: integer)
+	begin
+	end procedure;
+	
 begin
 
 end procedure;
 
+procedure ret_true: bool()
+begin 
+return true;
+end procedure;
 
 procedure add_float: float()
 	variable q : float;
@@ -33,12 +42,14 @@ c := "A";
 
 if(i > 100) then
 //do something#
-	i:= 1110;
+	i:= 1110 + c;
+	//c:= 1 +4 +8 < 9;
 else
 	i:= 3000;
 end if;
 
 for (a:=0; 1==1)
+	//c := 1+(12 < 0);
 	i := 50;
 end for;
 
