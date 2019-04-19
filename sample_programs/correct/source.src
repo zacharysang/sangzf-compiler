@@ -5,6 +5,7 @@ variable a : integer;
 variable c : string;
 variable myArray : integer[15];
 variable d : float;
+variable e : bool;
 
 type number is integer;
 
@@ -36,7 +37,7 @@ end procedure;
 
 begin
 
-i := 100;
+i := ret_true();
 c := "A";
 
 if(i > 100) then

@@ -263,7 +263,7 @@ pub enum Type {
 impl ToString for Type {
   fn to_string(&self) -> String {
     return match self {
-      Type::None => String::from("n/a"),
+      Type::None => String::from(String::from("_")),
       Type::Procedure(params, result) => {
         
         let mut params_str = String::new();
@@ -289,11 +289,16 @@ impl ToString for Type {
       Type::String => String::from("string"),
       Type::Bool => String::from("bool"),
       Type::Array(el_type, size) => {
+        let size = if size > &0 {
+          size.to_string()
+        } else {
+          String::from("_")
+        };
         let mut array_str = String::from("array(");
         
         array_str.push_str(&el_type.to_string());
         array_str.push_str(")[");
-        array_str.push_str(&size.to_string());
+        array_str.push_str(&size[..]);
         array_str.push_str("]");
         
         array_str

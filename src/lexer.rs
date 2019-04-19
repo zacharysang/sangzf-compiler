@@ -90,6 +90,21 @@ impl <'a> Lexer<'a> {
     return token_types;
   }
   
+  fn get_type(token: &Token, chars: &String) -> Type {
+    return match token {
+      Token::FalseKW(_) | Token::TrueKW(_) => Type::Bool,
+      Token::String(_) => Type::String,
+      Token::Number(_) => {
+        if chars.contains(".") {
+          Type::Float
+        } else {
+          Type::Integer
+        }
+      }
+      _ => Type::None
+    }
+  }
+  
 }
 
 impl <'a> Iterator for Lexer<'a> {
@@ -205,7 +220,7 @@ impl <'a> Iterator for Lexer<'a> {
             is_comment = true;
           }
         
-          next_token = Some(TokenEntry { line_num: self.line_num, chars: chars, tok_type: tok_type, r#type: Type::None});
+          next_token = Some(TokenEntry { line_num: self.line_num, r#type: Lexer::get_type(&tok_type, &chars), chars: chars, tok_type: tok_type});
         }
     
       } else {
@@ -232,5 +247,4 @@ impl <'a> Iterator for Lexer<'a> {
     
     return next_token;
   }
-  
 }

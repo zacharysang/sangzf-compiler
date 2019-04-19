@@ -542,8 +542,8 @@ impl <'a>Parser<'a> {
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn procedure_call_w_identifier(&mut self, identifier: ParserResult, resolve_type: &Type) -> ParserResult {
-    if let ParserResult::Success(procedure_id) = identifier {
+  pub fn procedure_call_w_identifier(&mut self, mut identifier: ParserResult, resolve_type: &Type) -> ParserResult {
+    if let ParserResult::Success(mut procedure_id) = identifier {
     
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
       if let ParserResult::Success(_) = l_paren {
@@ -568,10 +568,10 @@ impl <'a>Parser<'a> {
         // parse optional argument list (includes checking types)
         self.argument_list(procedure_params.iter());
         
-        let mut r_paren = self.parse_tok(tokens::parens::RParen::start());
-        if let ParserResult::Success(entry) = &mut r_paren {
-          entry.r#type = Type::Procedure(procedure_params, Box::new(procedure_ret));
-          return r_paren;
+        let r_paren = self.parse_tok(tokens::parens::RParen::start());
+        if let ParserResult::Success(entry) = &r_paren {
+          procedure_id.r#type = procedure_ret;
+          return ParserResult::Success(procedure_id);
         } else { return r_paren; }
       } else { return l_paren; }
     } else { return identifier; }
@@ -585,10 +585,22 @@ impl <'a>Parser<'a> {
     
   }
   
-  pub fn name_w_identifier(&mut self, identifier: ParserResult) -> ParserResult {
-    if let ParserResult::Success(..) = identifier {
+  pub fn name_w_identifier(&mut self, mut identifier: ParserResult) -> ParserResult {
+    if let ParserResult::Success(id_entry) = &mut identifier {
     
-      // optionally parse square bracket
+      // make sure the identifier exists
+      let symbol = if let Some(value) = self.get_symbol(&id_entry.chars) {
+        value
+      } else {
+        return ParserResult::ErrSymbolNotFound{line_num: id_entry.line_num, name: String::from(&id_entry.chars[..])};
+      };
+      
+      // extract the type of the identifier
+      let val_type = symbol.r#type.clone();
+      
+      id_entry.r#type = val_type;
+    
+      // optionally parse square bracket if array
       let peek_tok = self.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         // if next up is an LBracket, commit to parsing this optional portion
@@ -601,13 +613,16 @@ impl <'a>Parser<'a> {
           if let ParserResult::Success(_) = expression {
             let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
             if let ParserResult::Success(_) = r_bracket {
-              return r_bracket;
-            } else {
-              return r_bracket;
-            }
-          } else {
-            return expression;
-          }
+            
+              if let Type::Array(..) = id_entry.r#type {} else {
+                return ParserResult::ErrInvalidType{line_num: id_entry.line_num,
+                                                    expected: vec![Type::Array(Box::new(Type::None), 0)],
+                                                    actual: id_entry.r#type.clone()};
+              }
+            
+              return identifier;
+            } else { return r_bracket; }
+          } else { return expression; }
         }
       }
       
@@ -828,11 +843,9 @@ impl <'a>Parser<'a> {
               if let ParserResult::Success(_) = arith_op {
                 return _expression(slf, resolve_type);
               } else {
-                arith_op.print();
                 return arith_op;
               }
             } else {
-              ampersand.print();
               return ampersand;
             }
           },
@@ -843,11 +856,9 @@ impl <'a>Parser<'a> {
               if let ParserResult::Success(_) = arith_op {
                 return _expression(slf, resolve_type);
               } else {
-                arith_op.print();
                 return arith_op;
               }
             } else {
-              pipe.print();
               return pipe;
             }
           },
@@ -872,7 +883,6 @@ impl <'a>Parser<'a> {
     if let ParserResult::Success(_) = arith_op {
       return _expression(self, resolve_type);
     } else {
-      arith_op.print();
       return arith_op;
     }
   }
@@ -936,7 +946,9 @@ impl <'a>Parser<'a> {
         let idx_type = Type::Integer;
         let expression = self.expression(&idx_type);
         if let ParserResult::Success(_) = expression {
-          return self.parse_tok(tokens::brackets::RBracket::start());
+          if let ParserResult::Success(_) = self.parse_tok(tokens::brackets::RBracket::start()) {
+            return identifier;
+          }
         } else {
           return expression;
         }
@@ -1098,13 +1110,18 @@ impl <'a>Parser<'a> {
     }
     
     return self.name_w_identifier(identifier);
+    
   }
   
   pub fn name_or_number(&mut self) -> ParserResult {
     
     // optionally parse a dash
-    // TODO capture the value so it can be used when writing to the symbol table
-    self.parse_tok(tokens::dash::Dash::start());
+    // TODO act on this value. May need to negate the number and reject non-multipliable
+    let negate = if let ParserResult::Success(_) = self.parse_tok(tokens::dash::Dash::start()) {
+      true
+    } else {
+      false
+    };
     
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = &peek_tok {
@@ -1135,26 +1152,28 @@ impl <'a>Parser<'a> {
           } else { return l_paren; }
         },
         Token::Identifier(_) => { 
-          
-          let result = self.procedure_call_or_name(resolve_type);
-          
-          // resolve to the result of a procedure call
-          if let ParserResult::Success(_) = result {
-            return result;
-          } else {
-            result.print();
-            return result;
-          }
+          return self.procedure_call_or_name(resolve_type);
         },
         Token::Dash(_) => {
           // this could be a name or number depending on the next token
           return self.name_or_number();
         },
-        Token::String(_) => { return self.parse_tok(tokens::string::String::start()); },
-        Token::Number(_) => { return self.parse_tok(tokens::number::Number::start()); }
-        Token::TrueKW(_) => { return self.parse_tok(tokens::true_kw::TrueKW::start()); },
+        Token::String(_) => {
+          return self.parse_tok(tokens::string::String::start());
+        },
+        Token::Number(_) => {
+          return self.parse_tok(tokens::number::Number::start()); 
+        }
+        Token::TrueKW(_) => {
+          return self.parse_tok(tokens::true_kw::TrueKW::start());
+        },
         Token::FalseKW(_) => { return self.parse_tok(tokens::false_kw::FalseKW::start()); },
-        _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("('('|<identifier>|'-'|<number>|<string>|true|false)"), actual: String::from(&tok_entry.chars[..])} }
+        _ => {
+          return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num,
+                                                  expected: String::from("('('|<identifier>|'-'|<number>|<string>|true|false)"),
+                                                  actual: String::from(&tok_entry.chars[..])};
+
+        }
       }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
@@ -1217,7 +1236,6 @@ impl <'a>Parser<'a> {
         if let Some(symbol) = global_table.get(name) {
           return Some(symbol);
         } else {
-          println!("Symbol not found: '{}'", name);
           return None;
         }
       } else {
