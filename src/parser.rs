@@ -565,20 +565,9 @@ impl <'a>Parser<'a> {
         // parse optional argument list (includes checking types)
         self.argument_list(procedure_params.iter());
         
-        let r_paren = self.parse_tok(tokens::parens::RParen::start());
-        if let ParserResult::Success(_) = r_paren {
-        
-          // check that the return type is compatible
-          let compatible = Parser::is_compatible(resolve_type, &procedure_ret);
-          if compatible {
-            // procedure return type is compatible with the type it is expected to resolve to
-          } else {
-            // incompatible types return error result
-            return ParserResult::ErrInvalidType{line_num: procedure_id.line_num,
-                                                expected: vec![resolve_type.clone()],
-                                                actual: procedure_ret};
-          }
-        
+        let mut r_paren = self.parse_tok(tokens::parens::RParen::start());
+        if let ParserResult::Success(entry) = &mut r_paren {
+          entry.r#type = Type::Procedure(procedure_params, Box::new(procedure_ret));
           return r_paren;
         } else { return r_paren; }
       } else { return l_paren; }
@@ -680,15 +669,6 @@ impl <'a>Parser<'a> {
               if let ParserResult::Success(_) = term {
                 let relation = _relation(slf, resolve_type);
                 
-                if let ParserResult::Success(_) = relation {
-                  // check that resolve type is compatible with bool
-                  if !Parser::is_compatible(&Type::Bool, resolve_type) {
-                    return ParserResult::ErrInvalidType{line_num: lt_entry.line_num,
-                                                        expected: vec![resolve_type.clone()],
-                                                        actual: Type::Bool};
-                  }
-                }
-                
                 return relation;
               } else {
                 return term;
@@ -703,16 +683,7 @@ impl <'a>Parser<'a> {
               let term = slf.term(resolve_type);
               if let ParserResult::Success(_) = term {
                 let relation = _relation(slf, resolve_type);
-                
-                if let ParserResult::Success(_) = relation {
-                  // check that resolve type is compatible with bool
-                  if !Parser::is_compatible(&Type::Bool, resolve_type) {
-                    return ParserResult::ErrInvalidType{line_num: gte_entry.line_num,
-                                                        expected: vec![resolve_type.clone()],
-                                                        actual: Type::Bool};
-                  }
-                }
-                
+
                 return relation;
               } else {
                 return term;
@@ -726,18 +697,7 @@ impl <'a>Parser<'a> {
             if let ParserResult::Success(lte_entry) = lte {
               let term = slf.term(resolve_type);
               if let ParserResult::Success(_) = term {
-              
                 let relation = _relation(slf, resolve_type);
-                
-                if let ParserResult::Success(_) = relation {
-                  // check that resolve type is compatible with bool
-                  if !Parser::is_compatible(&Type::Bool, resolve_type) {
-                    return ParserResult::ErrInvalidType{line_num: lte_entry.line_num,
-                                                        expected: vec![resolve_type.clone()],
-                                                        actual: Type::Bool};
-                  }
-                }
-              
                 return relation;
               } else {
                 return term;
@@ -752,16 +712,6 @@ impl <'a>Parser<'a> {
               let term = slf.term(resolve_type);
               if let ParserResult::Success(_) = term {
                 let relation = _relation(slf, resolve_type);
-                
-                if let ParserResult::Success(_) = relation {
-                  // check that resolve type is compatible with bool
-                  if !Parser::is_compatible(&Type::Bool, resolve_type) {
-                    return ParserResult::ErrInvalidType{line_num: gt_entry.line_num,
-                                                        expected: vec![resolve_type.clone()],
-                                                        actual: Type::Bool};
-                  }
-                }
-                
                 return relation;
               } else {
                 return term;
@@ -775,17 +725,7 @@ impl <'a>Parser<'a> {
             if let ParserResult::Success(eq_entry) = eq {
               let term = slf.term(resolve_type);
               if let ParserResult::Success(_) = term {
-                
                 let relation = _relation(slf, resolve_type);
-                if let ParserResult::Success(_) = relation {
-                  // check that resolve type is compatible with bool
-                  if !Parser::is_compatible(&Type::Bool, resolve_type) {
-                    return ParserResult::ErrInvalidType{line_num: eq_entry.line_num,
-                                                        expected: vec![resolve_type.clone()],
-                                                        actual: Type::Bool};
-                  }
-                }
-                
                 return relation;
               } else { return term; }
             } else { return eq; }
@@ -796,15 +736,6 @@ impl <'a>Parser<'a> {
               let term = slf.term(resolve_type);
               if let ParserResult::Success(_) = term {
                 let relation = _relation(slf, resolve_type);
-                
-                if let ParserResult::Success(_) = relation {
-                  // check that resolve type is compatible with bool
-                  if !Parser::is_compatible(&Type::Bool, resolve_type) {
-                    return ParserResult::ErrInvalidType{line_num: neq_entry.line_num,
-                                                        expected: vec![resolve_type.clone()],
-                                                        actual: Type::Bool};
-                  }
-                }
                 return relation;
               } else { return term; }
             } else { return neq; }
@@ -1290,37 +1221,20 @@ impl <'a>Parser<'a> {
   }
   
   fn is_compatible(expected_type: &Type, actual_type: &Type) -> bool {
-    match expected_type {
-      Type::Integer => {
-        if let Type::Float | Type::Integer | Type::Bool = actual_type {
-          return true;
-        } else {
-          return false;
-        }
+    return match (expected_type, actual_type) {
+      (Type::Integer, Type::Bool) | (Type::Bool, Type::Integer) => true,
+      (Type::Integer, Type::Float) | (Type::Float, Type:: Integer) => true,
+      (Type::Array(el_type_a, size_a), Type::Array(el_type_b, size_b)) => {
+        Parser::is_compatible(el_type_a, el_type_b) && size_a == size_b
       },
-      Type::Float => {
-        if let Type::Float | Type:: Integer = actual_type {
-          return true;
-        } else {
-          return false;
-        }
+      (Type::Array(el_type, size), other_type) => {
+        Parser::is_compatible(el_type, other_type)
       },
-      Type::Bool => {
-        if let Type::Bool | Type::Integer = actual_type {
-          return true;
-        } else {
-          return false;
-        }
-      },
-      Type::Array(expected_el_type, expected_length) => {
-        if let Type::Array(actual_el_type, actual_length) = actual_type {
-          return (expected_length == actual_length) && Parser::is_compatible(expected_el_type, actual_el_type);
-        } else {
-          return false;
-        }
-      },
-      _ => {
-        return mem::discriminant(expected_type) == mem::discriminant(actual_type);
+      (other_type, Type::Array(el_type, el_size)) => {
+        Parser::is_compatible(el_type, other_type)
+      }
+      (a, b) => {
+        mem::discriminant(a) == mem::discriminant(b)
       }
     }
   }
