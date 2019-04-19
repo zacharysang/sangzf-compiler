@@ -15,8 +15,9 @@ fn main() {
   // mutable since we will want to remove the program_name arg
   let mut args : Vec<String> = env::args().collect();
   
-  let mut program_name = String::from("../sample_programs/correct/source.src");
+  let mut program_name = String::from("sample_programs/correct/source.src");
   if args.len() == 2 {
+    // get the second argument if there are 2 args in argv
     program_name = args.remove(1);
   }
   
