@@ -133,10 +133,6 @@ impl <'a>Parser<'a> {
               // if able to parse a statement, parse a terminating semicolon
               // program doesn't have a return type so neither program statements
               let statement = self.statement(&Type::None);
-              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
-                statement.print();
-              }
-              
               self.resync();
             },
             _ => break
@@ -208,11 +204,13 @@ impl <'a>Parser<'a> {
         let colon = self.parse_tok(tokens::colon::Colon::start());
         if let ParserResult::Success(_) = colon {
           let type_mark = self.type_mark();
-          if let ParserResult::Success(result_type) = type_mark {
+          if let ParserResult::Success(mut result_type) = type_mark {
             let l_paren = self.parse_tok(tokens::parens::LParen::start());
             if let ParserResult::Success(_) = l_paren {
             
               let return_type = Parser::get_type(&result_type);
+              result_type.r#type = return_type.clone();
+              
               let mut procedure_type = Type::Procedure(vec![], Box::new(return_type));
               
               // create a new symbol table for the procedure scope
@@ -402,16 +400,13 @@ impl <'a>Parser<'a> {
     let begin_kw = self.parse_tok(tokens::begin_kw::BeginKW::start());
     if let ParserResult::Success(_) = begin_kw {
       // parse an optional number of statements
-      // TODO break this out to its own function
+      // TODO unused, but use this variable to enforce that a return statement is found
+      let does_return = false;
       loop {
         if let Some(tok_entry) = self.lexer.peek() {
           match &tok_entry.tok_type {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
               let statement = self.statement(return_type);
-              if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
-                statement.print();
-              }
-              
               self.resync();
             },
             _ => break
@@ -529,13 +524,21 @@ impl <'a>Parser<'a> {
   pub fn statement(&mut self, return_type: &Type) -> ParserResult {
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = peek_tok {
-      match &tok_entry.tok_type {
-        Token::Identifier(_) => { return self.assignment_statement(); },
-        Token::IfKW(_) => { return self.if_statement(return_type); },
-        Token::ForKW(_) => { return self.loop_statement(return_type); },
-        Token::ReturnKW(_) => { return self.return_statement(return_type); },
+      let result = match &tok_entry.tok_type {
+        Token::Identifier(_) => self.assignment_statement(),
+        Token::IfKW(_) => self.if_statement(return_type),
+        Token::ForKW(_) => self.loop_statement(return_type),
+        Token::ReturnKW(_) => self.return_statement(return_type),
         _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(<identifier>|if|for|return)"), actual: String::from(&tok_entry.chars[..])} }
+      };
+      
+      if let ParserResult::Success(_) = result {
+        return result;
+      } else {
+        result.print();
+        return result;
       }
+      
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
@@ -907,9 +910,17 @@ impl <'a>Parser<'a> {
       };
       
       let assign = self.parse_tok(tokens::assign::Assign::start());
-      if let ParserResult::Success(_) = assign {
+      if let ParserResult::Success(assign_entry) = assign {
         let expression = self.expression(&dest_type);
-        if let ParserResult::Success(_) = expression {
+        if let ParserResult::Success(expr_entry) = &expression {
+        
+          // enforce that the expression type is compatible with destination type
+          if !Parser::is_compatible(&dest_type, &expr_entry.r#type) {
+            return ParserResult::ErrInvalidType{line_num: assign_entry.line_num,
+                                                expected: vec![dest_type],
+                                                actual: expr_entry.r#type.clone()};
+          }
+        
           return expression;
         } else { return expression; }
       } else { return assign; }
@@ -945,9 +956,17 @@ impl <'a>Parser<'a> {
         // if statement expressions should evaluate to a boolean
         let if_expr_type = Type::Bool;
         let expression = self.expression(&if_expr_type);
-        if let ParserResult::Success(_) = expression {
+        if let ParserResult::Success(expr_entry) = expression {
           let r_paren = self.parse_tok(tokens::parens::RParen::start());
-          if let ParserResult::Success(_) = r_paren {
+          if let ParserResult::Success(r_paren_entry) = r_paren {
+          
+            // check that that the expression type is compatible with bool
+            if !Parser::is_compatible(&if_expr_type, &expr_entry.r#type) {
+              return ParserResult::ErrInvalidType{line_num: r_paren_entry.line_num,
+                                                  expected: vec![if_expr_type],
+                                                  actual: expr_entry.r#type};
+            }
+          
             let then_kw = self.parse_tok(tokens::then_kw::ThenKW::start());
             if let ParserResult::Success(_) = then_kw {
               
@@ -958,10 +977,6 @@ impl <'a>Parser<'a> {
                     Token::ElseKW(_) | Token::EndKW(_) => break,
                     _ => {
                       let statement = self.statement(return_type);
-                      if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
-                        statement.print();
-                      }
-                      
                       self.resync();
                     }
                   }
@@ -980,10 +995,6 @@ impl <'a>Parser<'a> {
                       Token::EndKW(_) => break,
                       _ => {
                         let statement = self.statement(return_type);
-                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
-                          statement.print();
-                        } 
-                        
                         self.resync();
                       }
                     }
@@ -1019,9 +1030,16 @@ impl <'a>Parser<'a> {
             // loop statement expressions should evaluate to a boolean (invariant)
             let loop_expr_type = Type::Bool;
             let expression = self.expression(&loop_expr_type);
-            if let ParserResult::Success(_) = expression {
+            if let ParserResult::Success(expr_entry) = expression {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
-              if let ParserResult::Success(_) = r_paren {
+              if let ParserResult::Success(r_paren_entry) = r_paren {
+              
+                // check that that the expression type is compatible with bool
+                if !Parser::is_compatible(&loop_expr_type, &expr_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: r_paren_entry.line_num,
+                                                      expected: vec![loop_expr_type],
+                                                      actual: expr_entry.r#type};
+                }
                 
                 // parse an arbitrary number of statements delimited by ';'
                 loop {
@@ -1030,9 +1048,6 @@ impl <'a>Parser<'a> {
                       Token::EndKW(_) => break,
                       _ => {
                         let statement = self.statement(return_type);
-                        if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = statement {
-                          statement.print();
-                        }
                         self.resync();
                       }
                     }
@@ -1055,8 +1070,18 @@ impl <'a>Parser<'a> {
   
   pub fn return_statement(&mut self, return_type: &Type) -> ParserResult {
     let return_kw = self.parse_tok(tokens::return_kw::ReturnKW::start());
-    if let ParserResult::Success(_) = return_kw {
-      return self.expression(return_type);
+    if let ParserResult::Success(return_entry) = return_kw {
+      let expression = self.expression(return_type);
+      if let ParserResult::Success(expr_entry) = &expression {
+        // check that that the expression type is compatible with bool
+        if !Parser::is_compatible(&return_type, &expr_entry.r#type) {
+          return ParserResult::ErrInvalidType{line_num: return_entry.line_num,
+                                              expected: vec![return_type.clone()],
+                                              actual: expr_entry.r#type.clone()};
+        }
+      }
+      return expression;
+      
     } else { return return_kw; }
   }
 

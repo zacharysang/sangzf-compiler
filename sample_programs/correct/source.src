@@ -32,7 +32,6 @@ end procedure;
 procedure add_float: float()
 	variable q : float;
 begin
-
 end procedure;
 
 begin
