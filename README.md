@@ -16,14 +16,14 @@ Given a source file written in a language specific to this class, the compiler w
 This project is written in rust and so to build it, you'll need to install some tooling.
 [Here](https://www.rust-lang.org/tools/install) is an authoritative source on the instructions if more information is needed.
 
-1. Install rustup (rust's installer tool) using the following command: `curl https://sh.rustup.rs -sSf | sh`
-2. Update rust by running the following command (rustc/cargo version 1.33.0 is what's used for this project): `rustup install 1.33.0`
-3. Add to PATH env var by running the following/ adding it to your ~/.bashrc file: `export PATH="$HOME/.cargo/bin:${PATH}"`
+1. Install rustup (rust's installer tool) using the following command (and then following instructions to install from 'stable'): `curl https://sh.rustup.rs -sSf | sh`
+2. Add to PATH env var by running the following/ adding it to your ~/.bashrc file: `export PATH="$HOME/.cargo/bin:${PATH}"`
+3. Test installation by running: `rustc --version`
 
 ## Building and running
 After you have cloned this repo, following the following steps to build and run the compiler:
 1. Make sure you are in the directory of the project (the folder you cloned)
-2. Build and run using `cargo run <filename>`, where filename is the path to the source file you're using relative to your current directory.
+2. Build and run using `cargo run <filename>`, where filename is the path to the source file you're testing relative to your current directory.
   * Note: For my own development purposes, if no source file is selected `sample_programs/correct/source.src` is used by default.
 
 ## Uninstalling rust
