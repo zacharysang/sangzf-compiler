@@ -6,7 +6,7 @@ Given a source file written in a language specific to this class, the compiler w
 # Work done and work remaining
 - [x] Lexer
 - [x] Parser
-- [ ] Type-checker
+- [x] Type-checker
 - [ ] Code generation
 - [ ] Runtime
 
