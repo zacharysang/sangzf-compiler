@@ -1000,7 +1000,7 @@ impl <'a>Parser<'a> {
   }
   
   pub fn expression(&mut self, resolve_type: &Type) -> ParserResult {
-    fn _expression(slf: &mut Parser, resolve_type: &Type) -> ParserResult {
+    fn _expression(slf: &mut Parser, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
       let peek_tok = slf.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         match &tok_entry.tok_type {
@@ -1009,7 +1009,7 @@ impl <'a>Parser<'a> {
             if let ParserResult::Success(_) = ampersand {
               let arith_op = slf.arith_op(resolve_type);
               if let ParserResult::Success(_) = arith_op {
-                return _expression(slf, resolve_type);
+                return _expression(slf, resolve_type, left);
               } else {
                 return arith_op;
               }
@@ -1022,7 +1022,7 @@ impl <'a>Parser<'a> {
             if let ParserResult::Success(_) = pipe {
               let arith_op = slf.arith_op(resolve_type);
               if let ParserResult::Success(_) = arith_op {
-                return _expression(slf, resolve_type);
+                return _expression(slf, resolve_type, left);
               } else {
                 return arith_op;
               }
@@ -1032,12 +1032,12 @@ impl <'a>Parser<'a> {
           },
           _ => {
             // base case: if non-matching token is hit, do not parse (lambda-production)
-            return ParserResult::Success(TokenEntry::none_tok());
+            return ParserResult::Success(left);
           }
         }
       } else {
         // base case: allow nothing to be parsed
-        return ParserResult::Success(TokenEntry::none_tok());
+        return ParserResult::Success(left);
       }
     }
     
@@ -1048,8 +1048,8 @@ impl <'a>Parser<'a> {
     };
     
     let arith_op = self.arith_op(resolve_type);
-    if let ParserResult::Success(_) = arith_op {
-      return _expression(self, resolve_type);
+    if let ParserResult::Success(arith_op_entry) = arith_op {
+      return _expression(self, resolve_type, arith_op_entry);
     } else {
       return arith_op;
     }
