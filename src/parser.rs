@@ -708,76 +708,149 @@ impl <'a>Parser<'a> {
   }
   
   pub fn relation(&mut self, resolve_type: &Type) -> ParserResult {
-    fn _relation<'a>(slf: &mut Parser<'a>, resolve_type: &Type) -> ParserResult {
+    fn _relation<'a>(slf: &mut Parser<'a>, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
+    
+      let int_type = Type::Integer;
+      let string_type = Type::String;
+    
       let peek_tok = slf.lexer.peek();
       if let Some(tok_entry) = peek_tok {
-      
         match &tok_entry.tok_type {
           Token::LT(_) => {
             let lt = slf.parse_tok(tokens::lt::LT::start());
             if let ParserResult::Success(lt_entry) = lt {
               let term = slf.term(resolve_type);
-              if let ParserResult::Success(_) = term {
-                let relation = _relation(slf, resolve_type);
+              if let ParserResult::Success(term_entry) = term {
+              
+                // make sure that left is compatible with term_entry
+                if !Parser::is_compatible(&int_type, &left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![int_type],
+                                                      actual: left.r#type};
+                }
                 
-                return relation;
-              } else {
-                return term;
-              }
-            } else {
-              return lt;
-            }
+                if !Parser::is_compatible(&left.r#type, &term_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: term_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: term_entry.r#type};
+                }
+                
+                // fold the term value into left
+                // this will turn left into a bool type
+                left.r#type = Type::Bool;
+                left.line_num = term_entry.line_num;
+              
+                return _relation(slf, resolve_type, left);
+              } else { return term; }
+            } else { return lt; }
           },
           Token::GTE(_) => {
             let gte = slf.parse_tok(tokens::gte::GTE::start());
             if let ParserResult::Success(gte_entry) = gte {
               let term = slf.term(resolve_type);
-              if let ParserResult::Success(_) = term {
-                let relation = _relation(slf, resolve_type);
-
-                return relation;
-              } else {
-                return term;
-              }
-            } else {
-              return gte;
-            }
+              if let ParserResult::Success(term_entry) = term {
+              
+                // check that left and term_entry have compatible types
+                if !Parser::is_compatible(&int_type, &left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![int_type],
+                                                      actual: left.r#type};
+                }
+                
+                if !Parser::is_compatible(&left.r#type, &term_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: term_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: term_entry.r#type};
+                }
+                
+                // if compatible, fold term_entry into left
+                // which makes it a bool
+                left.r#type = Type::Bool;
+                left.line_num = term_entry.line_num;
+              
+                return _relation(slf, resolve_type, left);
+              } else { return term; }
+            } else { return gte; }
           },
           Token::LTE(_) => {
             let lte = slf.parse_tok(tokens::lte::LTE::start());
             if let ParserResult::Success(lte_entry) = lte {
               let term = slf.term(resolve_type);
-              if let ParserResult::Success(_) = term {
-                let relation = _relation(slf, resolve_type);
-                return relation;
-              } else {
-                return term;
-              }
-            } else {
-              return lte;
-            }
+              if let ParserResult::Success(term_entry) = term {
+              
+                // check that left and term_entry have compatible types
+                if !Parser::is_compatible(&int_type, &left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![int_type],
+                                                      actual: left.r#type};
+                }
+                
+                if !Parser::is_compatible(&left.r#type, &term_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: term_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: term_entry.r#type};
+                }
+                
+                // fold term_entry into left
+                // which converts the type of left to bool
+                left.r#type = Type::Bool;
+                left.line_num = term_entry.line_num;
+              
+                return _relation(slf, resolve_type, left);
+              } else { return term; }
+            } else { return lte; }
           },
           Token::GT(_) => {
             let gt = slf.parse_tok(tokens::gt::GT::start());
             if let ParserResult::Success(gt_entry) = gt {
               let term = slf.term(resolve_type);
-              if let ParserResult::Success(_) = term {
-                let relation = _relation(slf, resolve_type);
-                return relation;
-              } else {
-                return term;
-              }
-            } else {
-              return gt;
-            }
+              if let ParserResult::Success(term_entry) = term {
+                // check that term_entry type is compatible with left (so that a comparison is possible)
+                if !Parser::is_compatible(&int_type, &left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![int_type],
+                                                      actual: left.r#type};
+                }
+                
+                if !Parser::is_compatible(&left.r#type, &term_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: term_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: term_entry.r#type};
+                }
+                
+                // fold term entry into left
+                // which converts the type to bool
+                left.r#type = Type::Bool;
+                left.line_num = term_entry.line_num;
+              
+                return _relation(slf, resolve_type, left);
+              } else { return term; }
+            } else { return gt; }
           },
           Token::EQ(_) => {
             let eq = slf.parse_tok(tokens::eq::EQ::start());
             if let ParserResult::Success(eq_entry) = eq {
               let term = slf.term(resolve_type);
-              if let ParserResult::Success(_) = term {
-                let relation = _relation(slf, resolve_type);
-                return relation;
+              if let ParserResult::Success(term_entry) = term {
+              
+                if !(Parser::is_compatible(&int_type, &left.r#type) || Parser::is_compatible(&string_type, &left.r#type)) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![int_type, string_type],
+                                                      actual: left.r#type};
+                }
+                
+                if !Parser::is_compatible(&left.r#type, &term_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: term_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: term_entry.r#type};
+                }
+                
+                // fold term_entry into left by equality op
+                // converts left into a bool
+                left.r#type = Type::Bool;
+                left.line_num = term_entry.line_num;
+              
+                return _relation(slf, resolve_type, left);
               } else { return term; }
             } else { return eq; }
           },
@@ -785,9 +858,26 @@ impl <'a>Parser<'a> {
             let neq = slf.parse_tok(tokens::neq::NEQ::start());
             if let ParserResult::Success(neq_entry) = neq {
               let term = slf.term(resolve_type);
-              if let ParserResult::Success(_) = term {
-                let relation = _relation(slf, resolve_type);
-                return relation;
+              if let ParserResult::Success(term_entry) = term {
+              
+                if !(Parser::is_compatible(&int_type, &left.r#type) || Parser::is_compatible(&string_type, &left.r#type)) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![int_type, string_type],
+                                                      actual: left.r#type};
+                }
+                
+                if !Parser::is_compatible(&left.r#type, &term_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: term_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: term_entry.r#type};
+                }
+                
+                // fold term_entry into left via neq op
+                // converts left to a bool
+                left.r#type = Type::Bool;
+                left.line_num = term_entry.line_num;
+              
+                return _relation(slf, resolve_type, left);
               } else { return term; }
             } else { return neq; }
           }
@@ -795,22 +885,21 @@ impl <'a>Parser<'a> {
             // allow nothing to be parsed (allow lambda production)
             // this is the base case for this recursive function
             // will keep recursing until next token is not a comparison (<, >, etc.)
-            return ParserResult::Success(TokenEntry::none_tok()); 
+            return ParserResult::Success(left); 
           }
         }
       } else {
         // similar to catch-all, allow nothing to be parsed
-        return ParserResult::Success(TokenEntry::none_tok());
+        return ParserResult::Success(left);
       }
     }
     
     let term = self.term(resolve_type);
     if let ParserResult::Success(term_entry) = term {
-      return _relation(self, resolve_type);
-    } else {
-      return term;
-    }
-    
+      let rel = _relation(self, resolve_type, term_entry);
+      rel.print();
+      return rel;
+    } else { return term; }
   }
   
   pub fn arith_op(&mut self, resolve_type: &Type) -> ParserResult {
@@ -1357,7 +1446,7 @@ impl ParserResult {
         println!("({}) - Unexpected type: '{}', expected: '{}'", line_num, actual.to_string(), expected_str);
       },
       ParserResult::Error{line_num, msg} => println!("({}) - Error: {}", line_num, msg),
-      ParserResult::Success(_) => println!("Success")
+      ParserResult::Success(entry) => println!("({}) - Success", entry.line_num)
     }
   }
 }
