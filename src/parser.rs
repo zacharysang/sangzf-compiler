@@ -639,13 +639,30 @@ impl <'a>Parser<'a> {
   pub fn term(&mut self, resolve_type: &Type) -> ParserResult {
   
     // define function for factored parse rule
-    fn _term<'a>(slf: &mut Parser<'a>, resolve_type: &Type) -> ParserResult {
+    fn _term<'a>(slf: &mut Parser<'a>, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
       // accept either a '*' or '/'
       let asterisk = slf.parse_tok(tokens::asterisk::Asterisk::start());
       if let ParserResult::Success(_) = asterisk {
         let factor = slf.factor(resolve_type);
-        if let ParserResult::Success(_) = factor {
-          return _term(slf, resolve_type);
+        if let ParserResult::Success(factor_entry) = factor {
+        
+          // combine left with factor using '*' op
+          // ensure that left and factor are integer or float (both compatible with float)
+          let float_type = Type::Float;
+          if !Parser::is_compatible(&float_type, &left.r#type) {
+            return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                expected: vec![float_type, Type::Integer],
+                                                actual: left.r#type};
+          } else if !Parser::is_compatible(&float_type, &factor_entry.r#type) {
+            return ParserResult::ErrInvalidType{line_num: factor_entry.line_num,
+                                                expected: vec![float_type, Type::Integer],
+                                                actual: factor_entry.r#type};
+          } else {
+            // fold factor_entry into left
+            left.r#type = float_type;
+          }
+        
+          return _term(slf, resolve_type, left);
         } else {
           return factor;
         }
@@ -655,21 +672,22 @@ impl <'a>Parser<'a> {
       if let ParserResult::Success(_) = slash {
         let factor = slf.factor(resolve_type);
         if let ParserResult::Success(_) = factor {
-          return _term(slf, resolve_type);
+          return _term(slf, resolve_type, left);
         } else {
           return factor;
         }
       }
       
       // allow _term to parse nothing
-      return ParserResult::Success(TokenEntry::none_tok());
+      // in this case, just return the unmodified lhs
+      return ParserResult::Success(left);
       
     }
   
     // read bottomed-out factor rule
     let factor = self.factor(resolve_type);
-    if let ParserResult::Success(_) = factor {
-      return _term(self, resolve_type);
+    if let ParserResult::Success(left) = factor {
+      return _term(self, resolve_type, left);
     } else { return factor; }
     
   }

@@ -39,6 +39,7 @@ begin
 
 i := ret_true();
 c := "A";
+d := 1 * 2;
 
 if(i > 100) then
 //do something#
