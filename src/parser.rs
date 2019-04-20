@@ -661,6 +661,7 @@ impl <'a>Parser<'a> {
             
             // upgrade the accumulated type to a float
             left.r#type = float_type;
+            left.line_num = factor_entry.line_num;
           }
         
           return _term(slf, resolve_type, left);
@@ -687,6 +688,7 @@ impl <'a>Parser<'a> {
             
             // upgrade the type to a float
             left.r#type = float_type;
+            left.line_num = factor_entry.line_num;
           }
         
           return _term(slf, resolve_type, left);
@@ -897,13 +899,15 @@ impl <'a>Parser<'a> {
     let term = self.term(resolve_type);
     if let ParserResult::Success(term_entry) = term {
       let rel = _relation(self, resolve_type, term_entry);
-      rel.print();
       return rel;
     } else { return term; }
   }
   
   pub fn arith_op(&mut self, resolve_type: &Type) -> ParserResult {
-    fn _arith_op(slf: &mut Parser, resolve_type: &Type) -> ParserResult {
+    fn _arith_op(slf: &mut Parser, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
+    
+      let float_type = Type::Float;
+    
       let peek_tok = slf.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         match &tok_entry.tok_type {
@@ -911,8 +915,29 @@ impl <'a>Parser<'a> {
             let plus = slf.parse_tok(tokens::plus::Plus::start());
             if let ParserResult::Success(_) = plus {
               let relation = slf.relation(resolve_type);
-              if let ParserResult::Success(_) = relation {
-                return _arith_op(slf, resolve_type);
+              if let ParserResult::Success(relation_entry) = relation {
+              
+                if !Parser::is_compatible(&float_type, &left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![float_type],
+                                                      actual: left.r#type};
+                }
+                
+                if !Parser::is_compatible(&float_type, &relation_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: relation_entry.line_num,
+                                                      expected: vec![float_type],
+                                                      actual: relation_entry.r#type};
+                }
+                
+                // fold relation entry into left
+                
+                // convert the type if relation_entry is a float
+                if let Type::Float = &relation_entry.r#type {
+                  left.r#type = float_type;
+                }
+                left.line_num = relation_entry.line_num;
+              
+                return _arith_op(slf, resolve_type, left);
               } else {
                 return relation;
               }
@@ -924,8 +949,29 @@ impl <'a>Parser<'a> {
             let dash = slf.parse_tok(tokens::dash::Dash::start());
             if let ParserResult::Success(_) = dash {
               let relation = slf.relation(resolve_type);
-              if let ParserResult::Success(_) = relation {
-                return _arith_op(slf, resolve_type);
+              if let ParserResult::Success(relation_entry) = relation {
+              
+                // check left and relation_entry have the correct types
+                if !Parser::is_compatible(&float_type, &left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                      expected: vec![float_type],
+                                                      actual: left.r#type};
+                }
+                
+                if !Parser::is_compatible(&float_type, &relation_entry.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: relation_entry.line_num,
+                                                      expected: vec![float_type],
+                                                      actual: relation_entry.r#type};
+                }
+                
+                // fold relation entry into left by '-'
+                // type will be float if either arg is a float. otherwise int
+                if let Type::Float = &relation_entry.r#type {
+                  left.r#type = float_type;
+                }
+                left.line_num = relation_entry.line_num;
+              
+                return _arith_op(slf, resolve_type, left);
               } else {
                 return relation;
               }
@@ -935,19 +981,19 @@ impl <'a>Parser<'a> {
           },
           _ => {
             // base case: allow nothing to be parsed if '+' and '-' not found
-            return ParserResult::Success(TokenEntry::none_tok());
+            return ParserResult::Success(left);
           }
         }
       } else {
         // base case
-        return ParserResult::Success(TokenEntry::none_tok());
+        return ParserResult::Success(left);
       }
     }
     
     // parse the initial relation where the recursion bottoms out
     let relation = self.relation(resolve_type);
-    if let ParserResult::Success(_) = relation {
-      return _arith_op(self, &Type::Float);
+    if let ParserResult::Success(relation_entry) = relation {
+      return _arith_op(self, &Type::Float, relation_entry);
     } else {
       return relation;
     }
