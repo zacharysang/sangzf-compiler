@@ -935,6 +935,7 @@ impl <'a>Parser<'a> {
                 if let Type::Float = &relation_entry.r#type {
                   left.r#type = float_type;
                 }
+                
                 left.line_num = relation_entry.line_num;
               
                 return _arith_op(slf, resolve_type, left);
@@ -1098,9 +1099,7 @@ impl <'a>Parser<'a> {
     let arith_op = self.arith_op(resolve_type);
     if let ParserResult::Success(arith_op_entry) = arith_op {
       return _expression(self, resolve_type, arith_op_entry);
-    } else {
-      return arith_op;
-    }
+    } else { return arith_op; }
   }
   
   pub fn argument_list(&mut self, mut param_types: Iter<Box<Type>>) -> ParserResult {
@@ -1362,7 +1361,7 @@ impl <'a>Parser<'a> {
             if let ParserResult::Success(_) = expression {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
               if let ParserResult::Success(_) = r_paren {
-                return r_paren;
+                return expression;
               } else { return r_paren; }
             } else { return expression; }
           } else { return l_paren; }

@@ -22,7 +22,7 @@ PROGRAM grant IS
 			end for;
 		end procedure;
 
-	begin
+begin
 		tmp := if_proc();
 		tmp := for_proc();
 end program

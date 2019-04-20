@@ -44,7 +44,7 @@ d := 1 + 2;
 if(i > 100) then
 //do something#
 	i:= 1110 + 2;
-	d:= 1 +4 +8;
+	d:= 1 |4 +3;
 else
 	i:= 3000;
 end if;
