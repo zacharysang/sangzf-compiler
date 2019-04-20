@@ -646,7 +646,6 @@ impl <'a>Parser<'a> {
         let factor = slf.factor(resolve_type);
         if let ParserResult::Success(factor_entry) = factor {
         
-          // combine left with factor using '*' op
           // ensure that left and factor are integer or float (both compatible with float)
           let float_type = Type::Float;
           if !Parser::is_compatible(&float_type, &left.r#type) {
@@ -659,23 +658,39 @@ impl <'a>Parser<'a> {
                                                 actual: factor_entry.r#type};
           } else {
             // fold factor_entry into left
+            
+            // upgrade the accumulated type to a float
             left.r#type = float_type;
           }
         
           return _term(slf, resolve_type, left);
-        } else {
-          return factor;
-        }
+        } else { return factor; }
       }
       
       let slash = slf.parse_tok(tokens::slash::Slash::start());
       if let ParserResult::Success(_) = slash {
         let factor = slf.factor(resolve_type);
-        if let ParserResult::Success(_) = factor {
+        if let ParserResult::Success(factor_entry) = factor {
+        
+          // ensure that left and factor_entry types are compatible here
+          let float_type = Type::Float;
+          if !Parser::is_compatible(&float_type, &factor_entry.r#type) {
+            return ParserResult::ErrInvalidType{line_num: factor_entry.line_num,
+                                                expected: vec![float_type, Type::Integer],
+                                                actual: factor_entry.r#type};
+          } else if !Parser::is_compatible(&float_type, &left.r#type) {
+            return ParserResult::ErrInvalidType{line_num: left.line_num,
+                                                expected: vec![float_type, Type::Integer],
+                                                actual: left.r#type};
+          } else {
+            // fold the factor_entry value into left
+            
+            // upgrade the type to a float
+            left.r#type = float_type;
+          }
+        
           return _term(slf, resolve_type, left);
-        } else {
-          return factor;
-        }
+        } else { return factor; }
       }
       
       // allow _term to parse nothing
