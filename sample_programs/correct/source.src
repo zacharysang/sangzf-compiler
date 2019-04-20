@@ -43,8 +43,8 @@ d := 1 + 2;
 
 if(i > 100) then
 //do something#
-	i:= 1110 + c;
-	//c:= 1 +4 +8 < 9;
+	i:= 1110 + 2;
+	d:= 1 +4 +8;
 else
 	i:= 3000;
 end if;

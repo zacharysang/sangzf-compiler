@@ -1008,7 +1008,31 @@ impl <'a>Parser<'a> {
             let ampersand = slf.parse_tok(tokens::ampersand::Ampersand::start());
             if let ParserResult::Success(_) = ampersand {
               let arith_op = slf.arith_op(resolve_type);
-              if let ParserResult::Success(_) = arith_op {
+              if let ParserResult::Success(arith_op_entry) = arith_op {
+              
+                // check that arith_op_entyr and left are the same type
+                if mem::discriminant(&arith_op_entry.r#type) != mem::discriminant(&left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: arith_op_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: arith_op_entry.r#type};
+                }
+                
+                // check that type is either int or bool (for bitwise or logical op)
+                if let Type::Bool = &arith_op_entry.r#type {
+                  // perform logical operation (returns bool)
+                  
+                } else if let Type::Integer = &arith_op_entry.r#type {
+                  // perform bitwise operation (return integer)
+                  
+                } else {
+                  // invalid type
+                  return ParserResult::ErrInvalidType{line_num: arith_op_entry.line_num,
+                                                      expected: vec![Type::Bool, Type::Integer],
+                                                      actual: arith_op_entry.r#type};
+                }
+                
+                left.line_num = arith_op_entry.line_num;
+              
                 return _expression(slf, resolve_type, left);
               } else {
                 return arith_op;
@@ -1021,7 +1045,31 @@ impl <'a>Parser<'a> {
             let pipe = slf.parse_tok(tokens::pipe::Pipe::start());
             if let ParserResult::Success(_) = pipe {
               let arith_op = slf.arith_op(resolve_type);
-              if let ParserResult::Success(_) = arith_op {
+              if let ParserResult::Success(arith_op_entry) = arith_op {
+              
+                // check that arith_op_entyr and left are the same type
+                if mem::discriminant(&arith_op_entry.r#type) != mem::discriminant(&left.r#type) {
+                  return ParserResult::ErrInvalidType{line_num: arith_op_entry.line_num,
+                                                      expected: vec![left.r#type],
+                                                      actual: arith_op_entry.r#type};
+                }
+                
+                // check that type is either int or bool (for bitwise or logical op)
+                if let Type::Bool = &arith_op_entry.r#type {
+                  // perform logical operation (returns bool)
+                  
+                } else if let Type::Integer = &arith_op_entry.r#type {
+                  // perform bitwise operation (return integer)
+                  
+                } else {
+                  // invalid type
+                  return ParserResult::ErrInvalidType{line_num: arith_op_entry.line_num,
+                                                      expected: vec![Type::Bool, Type::Integer],
+                                                      actual: arith_op_entry.r#type};
+                }
+                
+                left.line_num = arith_op_entry.line_num;
+
                 return _expression(slf, resolve_type, left);
               } else {
                 return arith_op;
