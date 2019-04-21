@@ -724,13 +724,13 @@ impl <'a>Parser<'a> {
               let term = slf.term(resolve_type);
               if let ParserResult::Success(term_entry) = term {
               
-                // make sure that left is compatible with term_entry
                 if !Parser::is_compatible(&int_type, &left.r#type) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![int_type],
+                                                      expected: vec![int_type, Type::Float, Type::Bool],
                                                       actual: left.r#type};
                 }
                 
+                // make sure that left is compatible with term_entry
                 if !Parser::is_compatible(&left.r#type, &term_entry.r#type) {
                   return ParserResult::ErrInvalidType{line_num: term_entry.line_num,
                                                       expected: vec![left.r#type],
@@ -755,7 +755,7 @@ impl <'a>Parser<'a> {
                 // check that left and term_entry have compatible types
                 if !Parser::is_compatible(&int_type, &left.r#type) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![int_type],
+                                                      expected: vec![int_type, Type::Float, Type::Bool],
                                                       actual: left.r#type};
                 }
                 
@@ -783,7 +783,7 @@ impl <'a>Parser<'a> {
                 // check that left and term_entry have compatible types
                 if !Parser::is_compatible(&int_type, &left.r#type) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![int_type],
+                                                      expected: vec![int_type, Type::Float, Type::Bool],
                                                       actual: left.r#type};
                 }
                 
@@ -810,7 +810,7 @@ impl <'a>Parser<'a> {
                 // check that term_entry type is compatible with left (so that a comparison is possible)
                 if !Parser::is_compatible(&int_type, &left.r#type) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![int_type],
+                                                      expected: vec![int_type, Type::Float, Type::Bool],
                                                       actual: left.r#type};
                 }
                 
@@ -837,7 +837,7 @@ impl <'a>Parser<'a> {
               
                 if !(Parser::is_compatible(&int_type, &left.r#type) || Parser::is_compatible(&string_type, &left.r#type)) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![int_type, string_type],
+                                                      expected: vec![int_type, Type::Float, Type::Bool, string_type],
                                                       actual: left.r#type};
                 }
                 
@@ -864,7 +864,7 @@ impl <'a>Parser<'a> {
               
                 if !(Parser::is_compatible(&int_type, &left.r#type) || Parser::is_compatible(&string_type, &left.r#type)) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![int_type, string_type],
+                                                      expected: vec![int_type, Type::Float, Type::Bool, string_type],
                                                       actual: left.r#type};
                 }
                 
@@ -919,13 +919,13 @@ impl <'a>Parser<'a> {
               
                 if !Parser::is_compatible(&float_type, &left.r#type) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![float_type],
+                                                      expected: vec![float_type, Type::Integer],
                                                       actual: left.r#type};
                 }
                 
                 if !Parser::is_compatible(&float_type, &relation_entry.r#type) {
                   return ParserResult::ErrInvalidType{line_num: relation_entry.line_num,
-                                                      expected: vec![float_type],
+                                                      expected: vec![float_type, Type::Integer],
                                                       actual: relation_entry.r#type};
                 }
                 
@@ -955,13 +955,13 @@ impl <'a>Parser<'a> {
                 // check left and relation_entry have the correct types
                 if !Parser::is_compatible(&float_type, &left.r#type) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
-                                                      expected: vec![float_type],
+                                                      expected: vec![float_type, Type::Integer],
                                                       actual: left.r#type};
                 }
                 
                 if !Parser::is_compatible(&float_type, &relation_entry.r#type) {
                   return ParserResult::ErrInvalidType{line_num: relation_entry.line_num,
-                                                      expected: vec![float_type],
+                                                      expected: vec![float_type, Type::Integer],
                                                       actual: relation_entry.r#type};
                 }
                 
@@ -1536,7 +1536,7 @@ impl ParserResult {
           expected_str.push_str(&r#type.to_string()[..]);
           expected_str.push_str(", ");
         }
-        println!("({}) - Unexpected type: '{}', expected: '{}'", line_num, actual.to_string(), expected_str);
+        println!("({}) - Unexpected type: '{}', expected: [{}]", line_num, actual.to_string(), expected_str);
       },
       ParserResult::Error{line_num, msg} => println!("({}) - Error: {}", line_num, msg),
       ParserResult::Success(entry) => println!("({}) - Success", entry.line_num)
