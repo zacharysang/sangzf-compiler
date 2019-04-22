@@ -2,6 +2,13 @@ use std::env;
 use std::fs::File;
 use std::io::*;
 
+extern crate llvm_sys;
+
+use std::ffi::CStr;
+
+use llvm_sys::prelude::*;
+use llvm_sys::{core, target};
+
 // expose token utilities (State struct, Token trait)
 mod tokenize;
 
@@ -10,7 +17,23 @@ mod tokens;
 mod lexer;
 mod parser;
 
+
+fn initialise_llvm() {
+    unsafe {
+        if target::LLVM_InitializeNativeTarget() != 0 {
+            panic!("Could not initialise target");
+        }
+        if target::LLVM_InitializeNativeAsmPrinter() != 0 {
+            panic!("Could not initialise ASM Printer");
+        }
+    }    
+}
+
+
 fn main() {
+
+  // check that llvm is ready to run
+  initialise_llvm();
 
   // mutable since we will want to remove the program_name arg
   let mut args : Vec<String> = env::args().collect();

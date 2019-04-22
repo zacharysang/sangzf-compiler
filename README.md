@@ -103,5 +103,10 @@ with semicolon (;) as the resync point.
 ## Type checking
 
 To begin type checking, I started by capturing the target types and passing 
-these down throughout parse functions. I then enforced the types allowed by 
-each operation as expressions were built up.
+these down throughout parse functions. Next I started by making types available 
+from the factor parse rules. As these values are combined within an expression, 
+the types are checked for compatibility with each other and with the type of 
+combination being applied (i.e. comparison, addition, division, etc.). If an 
+incompatible type is found, then an error ParserResult struct is passed through 
+to the top to be printed at the statement  level. At the statement level, 
+it is asserted that the expression's resolved type matches the type expected by the statement.

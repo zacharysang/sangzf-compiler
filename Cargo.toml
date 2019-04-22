@@ -5,3 +5,4 @@ authors = ["Zachary Sang <zacharysang@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+llvm-sys = "60"
