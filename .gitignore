@@ -1,6 +1,10 @@
-# ignore build files
-target
-
 # ignore generated binaries
 *
 !*.*
+
+# ignore build files
+target
+
+# ignore compiled test files
+*.o
+*.bc

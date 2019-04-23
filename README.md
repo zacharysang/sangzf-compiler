@@ -26,6 +26,11 @@ After you have cloned this repo, following the following steps to build and run 
 2. Build and run using `cargo run <filename>`, where filename is the path to the source file you're testing relative to your current directory.
   * Note: For my own development purposes, if no source file is selected `sample_programs/correct/source.src` is used by default.
 
+## Running compiled code
+After you have run the compiler, you will have a file named `<program_name>.bc` containing llvm bitcode. The following steps will obtain from this an executable file.
+1. Run `llc -filetype=obj <program_name>.bc`. This will output an object file, `<program_name>.o`.
+2. Run `gcc -o <desired_executable_name> <program_name>.o`. This should output the executable file.
+
 ## Uninstalling rust
 If you'd like to remove rust from your machine, simply run: `rustup self uninstall`.
 
