@@ -7,6 +7,7 @@ use llvm_sys::{core, target, bit_writer, analysis};
 // llvm references used as guides
 // * introduction to building llvm program using c-apis: https://pauladamsmith.com/blog/2015/01/how-to-get-started-with-llvm-c-api.html
 // * using llvm with rust (+ webassembly, but I didn't use that part): https://medium.com/@jayphelps/using-llvm-from-rust-to-generate-webassembly-93e8c193fdb4
+// * walkthrough on a compiler with llvm: https://releases.llvm.org/1.1/docs/Stacker.html#terminate
 
 use std::iter::Peekable;
 use std::str::Chars;
@@ -79,7 +80,7 @@ impl <'a>Parser<'a> {
     if let ParserResult::Success(identifier_entry) = program_header {
     
       // create type for program
-      let program_ret_type = unsafe { core::LLVMInt32Type() };
+      let program_ret_type = unsafe { core::LLVMVoidType() };
       
       // create arguments type for program
       let program_param_types = unsafe {
@@ -91,16 +92,20 @@ impl <'a>Parser<'a> {
       let program_type = unsafe { core::LLVMFunctionType(program_ret_type, program_param_types, 0, 0) };
       
       // create main program function (type: core::LLVMValueRef)
-      let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str(&identifier_entry.chars[..]), program_type) };
+      let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str!("main"), program_type) };
       
-      // add basic block to the program function
+      // add basic block to the program function (type: core::LLVMBasicBlockRef)
       let entry = unsafe { core::LLVMAppendBasicBlock(program, c_str("entry")) };
+      
       
       // create builder and position it at the end of basic block (type: LLVMBuilderRef)
       let mut builder = unsafe { 
         let b = core::LLVMCreateBuilder();
         core::LLVMPositionBuilderAtEnd(b, entry);
-
+        
+        // terminate the basic block
+        core::LLVMBuildRetVoid(b);
+        
         b
       };
     
@@ -117,7 +122,9 @@ impl <'a>Parser<'a> {
       
         // output contents of llvm program
         unsafe {
-          if bit_writer::LLVMWriteBitcodeToFile(self.llvm_module, c_str(&identifier_entry.chars)) != 0 {
+          let mut filename = identifier_entry.chars;
+          filename.push_str(".bc");
+          if bit_writer::LLVMWriteBitcodeToFile(self.llvm_module, c_str(&filename)) != 0 {
             println!("error writing bitcode to file, skipping\n");
           }
         }

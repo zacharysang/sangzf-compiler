@@ -4,9 +4,7 @@ use std::io::*;
 
 extern crate llvm_sys;
 
-use llvm_sys::prelude::*;
-use llvm_sys::{core, target};
-
+use llvm_sys::{target};
 
 // expose token utilities (State struct, Token trait)
 mod tokenize;
