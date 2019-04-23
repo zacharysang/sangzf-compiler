@@ -4,10 +4,9 @@ use std::io::*;
 
 extern crate llvm_sys;
 
-use std::ffi::CStr;
-
 use llvm_sys::prelude::*;
 use llvm_sys::{core, target};
+
 
 // expose token utilities (State struct, Token trait)
 mod tokenize;

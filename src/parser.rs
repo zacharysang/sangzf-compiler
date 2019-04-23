@@ -1,3 +1,13 @@
+extern crate llvm_sys;
+
+// import llvm dependencies
+use llvm_sys::prelude::*;
+use llvm_sys::{core, target, bit_writer, analysis};
+
+// llvm references used as guides
+// * introduction to building llvm program using c-apis: https://pauladamsmith.com/blog/2015/01/how-to-get-started-with-llvm-c-api.html
+// * using llvm with rust (+ webassembly, but I didn't use that part): https://medium.com/@jayphelps/using-llvm-from-rust-to-generate-webassembly-93e8c193fdb4
+
 use std::iter::Peekable;
 use std::str::Chars;
 use std::collections::HashMap;
@@ -13,22 +23,40 @@ use crate::tokenize::token::Type;
 
 use crate::tokens;
 
+// macro to quickly create c strings from rust string literals
+// source: https://gist.githubusercontent.com/jayphelps/ee06dad051eb30d10982535958ad059a/raw/eeb9a68eb0fb9653a4b3af40dee75c4558d43238/main.rs
+// usage: c_str!("hello, world.")
+macro_rules! c_str {
+    ($s:expr) => (
+        // take s and add a null-termination and get as ptr encoded in utf8
+        concat!($s, "\0").as_ptr() as *const i8
+    );
+}
+
+// function to quickly create c strings from dynamic rust string slices
+fn c_str(slice: &str) -> *const i8 {
+  return slice.as_ptr() as *const i8
+}
+
 pub struct Parser<'a> {
   pub lexer: Peekable<Lexer<'a>>,
   pub symbol_table_chain: Vec<HashMap<String, Rc<TokenEntry>>>,
-  pub global_symbol_table: HashMap<String, Rc<TokenEntry>>
+  pub global_symbol_table: HashMap<String, Rc<TokenEntry>>,
+  pub llvm_module: *mut llvm_sys::LLVMModule
 }
 
 impl <'a>Parser<'a> {
   pub fn new(program: Peekable<Chars<'a>>) -> Self {
+  
     let lexer = Lexer::new(program);
     
-    let mut symbol_table_chain = vec![];
+    let symbol_table_chain = vec![];
     
     let parser = Parser {
       lexer: lexer.peekable(),
       symbol_table_chain: symbol_table_chain,
-      global_symbol_table: HashMap::new()
+      global_symbol_table: HashMap::new(),
+      llvm_module: unsafe { core::LLVMModuleCreateWithName(c_str!("compiler_module")) }
     };
     
     return parser;
@@ -48,10 +76,57 @@ impl <'a>Parser<'a> {
     self.symbol_table_chain.push(HashMap::new());
     
     let program_header = self.program_header();
-    if let ParserResult::Success(_) = program_header {
+    if let ParserResult::Success(identifier_entry) = program_header {
     
       let program_body = self.program_body();
       if let ParserResult::Success(_) = program_body {
+      
+        // create type for program
+        let program_ret_type = unsafe { core::LLVMInt32Type() };
+        
+        // create arguments type for program
+        let program_param_types = unsafe {
+          let param_types = [core::LLVMInt32Type(), core::LLVMInt32Type()].as_mut_ptr();
+          param_types
+        };
+        
+        // create function type
+        let program_type = unsafe { core::LLVMFunctionType(program_ret_type, program_param_types, 0, 0) };
+        
+        // create main program function (type: core::LLVMValueRef)
+        let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str(&identifier_entry.chars[..]), program_type) };
+        
+        // add basic block to the program function
+        let entry = unsafe { core::LLVMAppendBasicBlock(program, c_str("entry")) };
+        
+        // create builder and position it at the end of basic block
+        let builder = unsafe { 
+          let b = core::LLVMCreateBuilder();
+          core::LLVMPositionBuilderAtEnd(b, entry);
+  
+          b
+        };
+      
+        /*
+        // verify the module
+        unsafe {
+          let mut error: *mut *mut i8;
+          analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
+        }
+        */
+      
+        // output contents of llvm program
+        unsafe {
+          if bit_writer::LLVMWriteBitcodeToFile(self.llvm_module, c_str(&identifier_entry.chars)) != 0 {
+            println!("error writing bitcode to file, skipping\n");
+          }
+        }
+        
+        // clean up builder, module, and context
+        unsafe {
+          core::LLVMDisposeModule(self.llvm_module);
+          core::LLVMDisposeBuilder(builder);
+        }
       
         // Check for terminating period
         let period = self.parse_tok(tokens::period::Period::start());
@@ -83,11 +158,10 @@ impl <'a>Parser<'a> {
     if let ParserResult::Success(..) = program_kw {
     
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-      if let ParserResult::Success(..) = identifier {
-      
+      if let ParserResult::Success(identifier_entry) = identifier {
         let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
-        if let ParserResult::Success(tok_entry) = is_kw {
-          return ParserResult::Success(tok_entry);
+        if let ParserResult::Success(tok_entry) = &is_kw {
+          return ParserResult::Success(identifier_entry);
         } else {
           is_kw.print();
           return is_kw;
@@ -152,12 +226,11 @@ impl <'a>Parser<'a> {
           // leave the current scope
           let popped_table = self.symbol_table_chain.pop();
           
-          // debugging - check the values in this scope
+          // debugging - print the values in this scope
           if let Some(table) = popped_table {
             Parser::print_symbol_table(String::from("Program scope"), &table);
           }
           
-        
           return ParserResult::Success(tok_entry);
         } else { program_kw.print(); return program_kw; }
       } else { end_kw.print(); return end_kw; }
@@ -542,7 +615,7 @@ impl <'a>Parser<'a> {
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn procedure_call_w_identifier(&mut self, mut identifier: ParserResult, resolve_type: &Type) -> ParserResult {
+  pub fn procedure_call_w_identifier(&mut self, identifier: ParserResult, resolve_type: &Type) -> ParserResult {
     if let ParserResult::Success(mut procedure_id) = identifier {
     
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
