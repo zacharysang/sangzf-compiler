@@ -78,42 +78,42 @@ impl <'a>Parser<'a> {
     let program_header = self.program_header();
     if let ParserResult::Success(identifier_entry) = program_header {
     
-      let program_body = self.program_body();
+      // create type for program
+      let program_ret_type = unsafe { core::LLVMInt32Type() };
+      
+      // create arguments type for program
+      let program_param_types = unsafe {
+        let param_types = [core::LLVMInt32Type(), core::LLVMInt32Type()].as_mut_ptr();
+        param_types
+      };
+      
+      // create function type
+      let program_type = unsafe { core::LLVMFunctionType(program_ret_type, program_param_types, 0, 0) };
+      
+      // create main program function (type: core::LLVMValueRef)
+      let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str(&identifier_entry.chars[..]), program_type) };
+      
+      // add basic block to the program function
+      let entry = unsafe { core::LLVMAppendBasicBlock(program, c_str("entry")) };
+      
+      // create builder and position it at the end of basic block (type: LLVMBuilderRef)
+      let mut builder = unsafe { 
+        let b = core::LLVMCreateBuilder();
+        core::LLVMPositionBuilderAtEnd(b, entry);
+
+        b
+      };
+    
+      /*
+      // verify the module
+      unsafe {
+        let mut error: *mut *mut i8;
+        analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
+      }
+      */
+    
+      let program_body = self.program_body(&mut builder);
       if let ParserResult::Success(_) = program_body {
-      
-        // create type for program
-        let program_ret_type = unsafe { core::LLVMInt32Type() };
-        
-        // create arguments type for program
-        let program_param_types = unsafe {
-          let param_types = [core::LLVMInt32Type(), core::LLVMInt32Type()].as_mut_ptr();
-          param_types
-        };
-        
-        // create function type
-        let program_type = unsafe { core::LLVMFunctionType(program_ret_type, program_param_types, 0, 0) };
-        
-        // create main program function (type: core::LLVMValueRef)
-        let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str(&identifier_entry.chars[..]), program_type) };
-        
-        // add basic block to the program function
-        let entry = unsafe { core::LLVMAppendBasicBlock(program, c_str("entry")) };
-        
-        // create builder and position it at the end of basic block
-        let builder = unsafe { 
-          let b = core::LLVMCreateBuilder();
-          core::LLVMPositionBuilderAtEnd(b, entry);
-  
-          b
-        };
-      
-        /*
-        // verify the module
-        unsafe {
-          let mut error: *mut *mut i8;
-          analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
-        }
-        */
       
         // output contents of llvm program
         unsafe {
@@ -171,7 +171,7 @@ impl <'a>Parser<'a> {
     } else { program_kw.print(); return program_kw; }
   }
   
-  pub fn program_body(&mut self) -> ParserResult {
+  pub fn program_body(&mut self, builder: &mut LLVMBuilderRef) -> ParserResult {
     
     // create a new symbol table for this scope
     self.symbol_table_chain.push(HashMap::new());
