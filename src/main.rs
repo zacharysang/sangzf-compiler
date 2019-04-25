@@ -6,6 +6,12 @@ extern crate llvm_sys;
 
 use llvm_sys::{target};
 
+// expose llvm utility functions
+mod llvm_utils;
+
+// expose runtime functions
+mod builtins;
+
 // expose token utilities (State struct, Token trait)
 mod tokenize;
 

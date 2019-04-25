@@ -2,7 +2,7 @@ extern crate llvm_sys;
 
 // import llvm dependencies
 use llvm_sys::prelude::*;
-use llvm_sys::{core, target, bit_writer, analysis};
+use llvm_sys::*;//{core, target, bit_writer, analysis, dynamic_library};
 
 // llvm references used as guides
 // * introduction to building llvm program using c-apis: https://pauladamsmith.com/blog/2015/01/how-to-get-started-with-llvm-c-api.html
@@ -22,22 +22,11 @@ use crate::tokenize::token::Token;
 use crate::tokenize::token::TokenEntry;
 use crate::tokenize::token::Type;
 
+use crate::builtins;
+use crate::llvm_utils::{c_str};
+
 use crate::tokens;
 
-// macro to quickly create c strings from rust string literals
-// source: https://gist.githubusercontent.com/jayphelps/ee06dad051eb30d10982535958ad059a/raw/eeb9a68eb0fb9653a4b3af40dee75c4558d43238/main.rs
-// usage: c_str!("hello, world.")
-macro_rules! c_str {
-    ($s:expr) => (
-        // take s and add a null-termination and get as ptr encoded in utf8
-        concat!($s, "\0").as_ptr() as *const i8
-    );
-}
-
-// function to quickly create c strings from dynamic rust string slices
-fn c_str(slice: &str) -> *const i8 {
-  return slice.as_ptr() as *const i8
-}
 
 pub struct Parser<'a> {
   pub lexer: Peekable<Lexer<'a>>,
@@ -57,7 +46,7 @@ impl <'a>Parser<'a> {
       lexer: lexer.peekable(),
       symbol_table_chain: symbol_table_chain,
       global_symbol_table: HashMap::new(),
-      llvm_module: unsafe { core::LLVMModuleCreateWithName(c_str!("compiler_module")) }
+      llvm_module: unsafe { core::LLVMModuleCreateWithName(c_str("compiler_module")) }
     };
     
     return parser;
@@ -76,6 +65,12 @@ impl <'a>Parser<'a> {
     // create a global symbol table
     self.symbol_table_chain.push(HashMap::new());
     
+    // set up the built-in functions
+    unsafe {
+      //LoadLibraryPermanently(c_str("./builtins/builtins.so"));
+    }
+    builtins::bool::initialize_bool_funcs(self.llvm_module);
+    
     let program_header = self.program_header();
     if let ParserResult::Success(identifier_entry) = program_header {
     
@@ -92,11 +87,10 @@ impl <'a>Parser<'a> {
       let program_type = unsafe { core::LLVMFunctionType(program_ret_type, program_param_types, 0, 0) };
       
       // create main program function (type: core::LLVMValueRef)
-      let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str!("main"), program_type) };
+      let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str("main"), program_type) };
       
       // add basic block to the program function (type: core::LLVMBasicBlockRef)
       let entry = unsafe { core::LLVMAppendBasicBlock(program, c_str("entry")) };
-      
       
       // create builder and position it at the end of basic block (type: LLVMBuilderRef)
       let mut builder = unsafe { 
