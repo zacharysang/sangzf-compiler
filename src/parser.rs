@@ -2,7 +2,7 @@ extern crate llvm_sys;
 
 // import llvm dependencies
 use llvm_sys::prelude::*;
-use llvm_sys::*;//{core, target, bit_writer, analysis, dynamic_library};
+use llvm_sys::{core, target, bit_writer, analysis, support};
 
 // llvm references used as guides
 // * introduction to building llvm program using c-apis: https://pauladamsmith.com/blog/2015/01/how-to-get-started-with-llvm-c-api.html
@@ -67,7 +67,7 @@ impl <'a>Parser<'a> {
     
     // set up the built-in functions
     unsafe {
-      //LoadLibraryPermanently(c_str("./builtins/builtins.so"));
+      support::LLVMLoadLibraryPermanently(c_str("./builtins/builtins.so"));
     }
     builtins::bool::initialize_bool_funcs(self.llvm_module);
     
