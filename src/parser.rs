@@ -103,13 +103,17 @@ impl <'a>Parser<'a> {
         b
       };
     
-      /*
       // verify the module
       unsafe {
-        let mut error: *mut *mut i8;
+        let mut zero: *mut i8 = mem::zeroed();
+        let mut error: *mut *mut i8 = &mut zero;
         analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
+        if error != 0 {
+          println!("error: {}", **error);
+        }
+        core::LLVMDisposeMessage(*error);
       }
-      */
+      
     
       let program_body = self.program_body(&mut builder);
       if let ParserResult::Success(_) = program_body {
@@ -622,7 +626,7 @@ impl <'a>Parser<'a> {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
       if let ParserResult::Success(_) = l_paren {
         
-        // look up the procedure
+        // look up the procedure (token_entry)
         let procedure = match self.get_symbol(&procedure_id.chars) {
           Some(val) => val,
           None => return ParserResult::ErrSymbolNotFound{name: String::from(&procedure_id.chars[..]), line_num: procedure_id.line_num}
