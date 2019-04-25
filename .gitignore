@@ -1,6 +1,7 @@
 # ignore generated binaries
 *
 !*.*
+!*/
 
 # ignore build files
 target
