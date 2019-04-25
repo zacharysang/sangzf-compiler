@@ -115,3 +115,13 @@ combination being applied (i.e. comparison, addition, division, etc.). If an
 incompatible type is found, then an error ParserResult struct is passed through 
 to the top to be printed at the statement  level. At the statement level, 
 it is asserted that the expression's resolved type matches the type expected by the statement.
+
+## Code generation
+
+For code generation I used the [llvm_sys](http://rustdoc.taricorp.net/llvm-sys/llvm_sys/) rust crate (library).
+This wraps around the llvm c api. Because Rust does provide raw pointer types for this kind of integration, 
+my compiler is able to make calls into the llvm api and get back various llvm objects. 
+At first in this process I found confusing about this process is when to use rust-style references and c-style 
+raw pointers which are both present in Rust. On one hand, using Rust references allows values to be 
+considered by the borrow checker leading to improved safety, but raw references are required to conform to llvm_sys'
+apis.
