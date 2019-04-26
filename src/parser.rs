@@ -313,6 +313,19 @@ impl <'a>Parser<'a> {
                 // set the type of token to procedure
                 procedure_id.r#type = procedure_type;
                 
+                // build the llvm function
+                let llvm_proc = unsafe {
+                
+                  // build the return type
+                  
+                  // build the params type arr
+                  
+                  // build the function type
+                
+                  // add the function to the module
+                  //core::LLVMAddFunction(&mut self.llvm_module, c_str(&procedure_id.chars[..]), )
+                };
+                
                 // Note: Using Rc struct gives immutable multiple ownership
                 // this means that the symbols in the table are immutable
                 // may want to mutate to change the type, chars, tok_type of a symbol
@@ -589,10 +602,10 @@ impl <'a>Parser<'a> {
         let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
         if let ParserResult::Success(_) = is_kw {
           let type_mark = self.type_mark();
-          if let ParserResult::Success(_) = type_mark {
+          if let ParserResult::Success(type_entry) = &type_mark {
           
             // change the token entry type
-            type_id.r#type = Type::Type;
+            type_id.r#type = Type::Type(Box::new(Parser::get_type(&type_entry)));
             
             self.add_symbol(scope, Rc::new(type_id));
           
@@ -1523,6 +1536,22 @@ impl <'a>Parser<'a> {
       Token::BoolKW(_) => Type::Bool,
       _ => Type::None
     };
+  }
+  
+  // return the llvm type based on the type
+  pub fn get_llvm_type(t: &Type) -> LLVMTypeRef {
+    unsafe {
+      return match t {
+        Type::Integer => core::LLVMInt32Type(),
+        Type::Float => core::LLVMFloatType(),
+        Type::String => core::LLVMPointerType(core::LLVMInt32Type(), 0),
+        Type::Bool =>  core::LLVMInt32Type(),
+        _ => {
+          println!("type '{}' not supported yet", t.to_string());
+          core::LLVMVoidType()
+        }
+      };
+    }
   }
   
   pub fn get_symbol(&self, name: &String) -> Option<&TokenEntry> {

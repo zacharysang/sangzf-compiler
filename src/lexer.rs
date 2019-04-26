@@ -10,6 +10,9 @@ use crate::tokenize::char_group::CharGroup;
 
 use crate::tokens;
 
+// import llvm dependencies
+use llvm_sys::core;
+
 pub struct Lexer<'a> {
   pub program: Peekable<Chars<'a>>,
   pub line_num: u32,
@@ -220,7 +223,12 @@ impl <'a> Iterator for Lexer<'a> {
             is_comment = true;
           }
         
-          next_token = Some(TokenEntry { line_num: self.line_num, r#type: Lexer::get_type(&tok_type, &chars), chars: chars, tok_type: tok_type});
+          next_token = Some(TokenEntry {
+                              line_num: self.line_num,
+                              r#type: Lexer::get_type(&tok_type, &chars),
+                              chars: chars, tok_type: tok_type,
+                              value_ref: unsafe { core::LLVMConstInt(core::LLVMInt32Type(), 0, 0) }
+          });
         }
     
       } else {
@@ -234,7 +242,13 @@ impl <'a> Iterator for Lexer<'a> {
           // only report errors on non-zero tokens
           if chars.len() > 0 {
             self.errors.push(format!("Error! Unrecognized token, '{}' at line: {}", chars, self.line_num));
-            next_token = Some(TokenEntry {line_num: self.line_num, chars: chars.to_string(), tok_type: caught_tok, r#type: Type::None});
+            next_token = Some(TokenEntry {
+                                line_num: self.line_num,
+                                chars: chars.to_string(),
+                                tok_type: caught_tok,
+                                r#type: Type::None,
+                                value_ref: unsafe { core::LLVMConstInt(core::LLVMInt32Type(), 0, 0) }
+            });
           }
         }
           
