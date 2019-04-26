@@ -314,16 +314,33 @@ impl <'a>Parser<'a> {
                 procedure_id.r#type = procedure_type;
                 
                 // build the llvm function
-                let llvm_proc = unsafe {
+                procedure_id.value_ref = unsafe {
                 
                   // build the return type
+                  let ret_type = if let Type::Procedure(_, ret_type) = &procedure_id.r#type {
+                    Parser::get_llvm_type(&ret_type)
+                  } else {
+                    core::LLVMVoidType()
+                  };
                   
                   // build the params type arr
+                  let params_type = if let Type::Procedure(params, _) = &procedure_id.r#type {
+                    let mut types = vec![];
+                    
+                    for param in params {
+                      types.push(Parser::get_llvm_type(param));
+                    }
+                    
+                    types.as_mut_ptr()
+                  } else {
+                    [core::LLVMVoidType()].as_mut_ptr()
+                  };
                   
                   // build the function type
+                  let func_type = core::LLVMFunctionType(ret_type, params_type, 0, 0);
                 
                   // add the function to the module
-                  //core::LLVMAddFunction(&mut self.llvm_module, c_str(&procedure_id.chars[..]), )
+                  core::LLVMAddFunction(self.llvm_module, c_str(&procedure_id.chars[..]), func_type)
                 };
                 
                 // Note: Using Rc struct gives immutable multiple ownership
