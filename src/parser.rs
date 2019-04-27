@@ -3,6 +3,8 @@ extern crate llvm_sys;
 // import llvm dependencies
 use llvm_sys::prelude::*;
 use llvm_sys::{core, target, bit_writer, analysis, support};
+use llvm_sys::core::*;
+use std::ptr;
 
 // llvm references used as guides
 // * introduction to building llvm program using c-apis: https://pauladamsmith.com/blog/2015/01/how-to-get-started-with-llvm-c-api.html
@@ -23,7 +25,7 @@ use crate::tokenize::token::TokenEntry;
 use crate::tokenize::token::Type;
 
 use crate::builtins;
-use crate::llvm_utils::{c_str};
+use crate::llvm_utils::{c_str, null_str};
 
 use crate::tokens;
 
@@ -69,7 +71,8 @@ impl <'a>Parser<'a> {
     unsafe {
       support::LLVMLoadLibraryPermanently(c_str("./builtins/builtins.so"));
     }
-    builtins::bool::initialize_bool_funcs(self.llvm_module);
+    let (get_bool, put_bool) = builtins::bool::initialize_bool_funcs(self.llvm_module);
+    
     
     let program_header = self.program_header();
     if let ParserResult::Success(identifier_entry) = program_header {
@@ -97,6 +100,11 @@ impl <'a>Parser<'a> {
         let b = core::LLVMCreateBuilder();
         core::LLVMPositionBuilderAtEnd(b, entry);
         
+        // debugging, call putBool in main
+        let true_arg = [LLVMConstInt(core::LLVMInt32Type(), 0, 0 as i32)].as_mut_ptr();
+        
+        core::LLVMBuildCall(b, put_bool, true_arg, 1, null_str());
+        
         // terminate the basic block
         core::LLVMBuildRetVoid(b);
         
@@ -108,9 +116,7 @@ impl <'a>Parser<'a> {
         let mut zero: *mut i8 = mem::zeroed();
         let mut error: *mut *mut i8 = &mut zero;
         analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
-        if **error != 0 {
-          println!("error: {}", **error);
-        }
+        
         core::LLVMDisposeMessage(*error);
       }
       
