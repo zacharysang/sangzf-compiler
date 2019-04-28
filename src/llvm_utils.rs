@@ -12,20 +12,22 @@ macro_rules! c_str {
 */
 
 //use std::char;
+use std::mem;
+use std::ffi::{CStr, CString};
 
 // function to quickly create c strings from dynamic rust string slices
 pub fn c_str(slice: &str) -> *const i8 {
-
-  // code for adding null terminator to string
-  let mut s = String::from(slice);
-  //s.push(char::from(0 as u8));
-  //for ch in b"\0" {
-  //  s.push(char::from(*ch));
-  //}
-  
-  return slice.as_ptr() as *const i8;
+  return CString::new(slice).expect("could not get c-string from slice").into_raw();
 }
 
 pub fn null_str() -> *const i8 {
-    return b"\0".as_ptr() as *const _;
+    return c_str("");
+}
+
+pub fn error_buffer() -> *mut *mut i8 {
+  let mut zero: [i8; 256];
+  unsafe {
+    zero = mem::zeroed();
+  }
+  return &mut zero.as_mut_ptr();
 }

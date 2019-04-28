@@ -25,7 +25,7 @@ use crate::tokenize::token::TokenEntry;
 use crate::tokenize::token::Type;
 
 use crate::builtins;
-use crate::llvm_utils::{c_str, null_str};
+use crate::llvm_utils::{c_str, null_str, error_buffer};
 
 use crate::tokens;
 
@@ -113,8 +113,7 @@ impl <'a>Parser<'a> {
     
       // verify the module
       unsafe {
-        let mut zero: *mut i8 = mem::zeroed();
-        let mut error: *mut *mut i8 = &mut zero;
+        let mut error: *mut *mut i8 = error_buffer();
         analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
         
         core::LLVMDisposeMessage(*error);
@@ -124,10 +123,11 @@ impl <'a>Parser<'a> {
       let program_body = self.program_body(&mut builder);
       if let ParserResult::Success(_) = program_body {
       
+        let mut filename = identifier_entry.chars;
+        filename.push_str(".bc");
+      
         // output contents of llvm program
         unsafe {
-          let mut filename = identifier_entry.chars;
-          filename.push_str(".bc");
           if bit_writer::LLVMWriteBitcodeToFile(self.llvm_module, c_str(&filename)) != 0 {
             println!("error writing bitcode to file, skipping\n");
           }
@@ -323,30 +323,35 @@ impl <'a>Parser<'a> {
                 procedure_id.value_ref = unsafe {
                 
                   // build the return type
-                  let ret_type = if let Type::Procedure(_, ret_type) = &procedure_id.r#type {
-                    Parser::get_llvm_type(&ret_type)
-                  } else {
-                    core::LLVMVoidType()
-                  };
+                  let mut ret_type;
+                  let mut params_type;
                   
-                  // build the params type arr
-                  let params_type = if let Type::Procedure(params, _) = &procedure_id.r#type {
+                  if let Type::Procedure(params, ret) = &procedure_id.r#type {
+                    ret_type = Parser::get_llvm_type(ret);
+                    
                     let mut types = vec![];
                     
                     for param in params {
                       types.push(Parser::get_llvm_type(param));
                     }
                     
-                    types.as_mut_ptr()
+                    params_type = types.as_mut_ptr();
+                    
                   } else {
-                    [core::LLVMVoidType()].as_mut_ptr()
+                    return ParserResult::ErrInvalidType{line_num: procedure_id.line_num,
+                                                        expected: vec![Type::Procedure(vec![], Box::new(Type::None))],
+                                                        actual: procedure_id.r#type};
                   };
+                  
                   
                   // build the function type
                   let func_type = core::LLVMFunctionType(ret_type, params_type, 0, 0);
                 
                   // add the function to the module
-                  core::LLVMAddFunction(self.llvm_module, c_str(&procedure_id.chars[..]), func_type)
+                  let func_name = c_str(&procedure_id.chars[..]);
+                  let f = core::LLVMAddFunction(self.llvm_module, func_name, func_type);
+                  
+                  f
                 };
                 
                 // Note: Using Rc struct gives immutable multiple ownership
@@ -1569,6 +1574,7 @@ impl <'a>Parser<'a> {
         Type::Float => core::LLVMFloatType(),
         Type::String => core::LLVMPointerType(core::LLVMInt32Type(), 0),
         Type::Bool =>  core::LLVMInt32Type(),
+        Type::None => core::LLVMVoidType(),
         _ => {
           println!("type '{}' not supported yet", t.to_string());
           core::LLVMVoidType()
