@@ -15,14 +15,16 @@ procedure add_int: integer(variable p1: integer, variable p2: float)
 	global variable z : float;
 	global procedure inside_add_int: bool()
 	begin
+		return true;
 	end procedure;
 	
 	procedure inside_add_int2: bool(variable num: integer)
 	begin
+		return false;
 	end procedure;
 	
 begin
-
+	return 5;
 end procedure;
 
 procedure ret_true: bool()
@@ -33,6 +35,7 @@ end procedure;
 procedure add_float: float()
 	variable q : float;
 begin
+	return 3.1415;
 end procedure;
 
 begin

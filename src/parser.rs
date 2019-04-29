@@ -25,7 +25,7 @@ use crate::tokenize::token::TokenEntry;
 use crate::tokenize::token::Type;
 
 use crate::builtins;
-use crate::llvm_utils::{c_str, null_str, error_buffer};
+use crate::llvm_utils::{c_str, null_str, error_buffer, get_llvm_type};
 
 use crate::tokens;
 
@@ -106,23 +106,24 @@ impl <'a>Parser<'a> {
         let b = core::LLVMCreateBuilder();
         core::LLVMPositionBuilderAtEnd(b, entry);
         
-        // terminate the basic block
-        core::LLVMBuildRetVoid(b);
-        
         b
       };
     
-      // verify the module
-      unsafe {
-        let mut error: *mut *mut i8 = error_buffer();
-        analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
-        
-        core::LLVMDisposeMessage(*error);
-      }
-      
-    
       let program_body = self.program_body(&mut builder);
       if let ParserResult::Success(_) = program_body {
+      
+        // build the return
+        unsafe {
+          core::LLVMBuildRetVoid(builder);
+        }
+      
+        // verify the module
+        unsafe {
+          let mut error: *mut *mut i8 = error_buffer();
+          analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
+          
+          core::LLVMDisposeMessage(*error);
+        }
       
         let mut filename = identifier_entry.chars;
         filename.push_str(".bc");
@@ -271,13 +272,13 @@ impl <'a>Parser<'a> {
   }
   
   pub fn procedure_declaration(&mut self, scope: &Scope) -> ParserResult {
-    let procedure_header = self.procedure_header(scope);
+  
+    let mut builder = unsafe {
+      core::LLVMCreateBuilder()
+    };
+  
+    let procedure_header = self.procedure_header(&mut builder, scope);
     if let ParserResult::Success(return_type) = procedure_header {
-    
-      let mut builder = unsafe {
-        core::LLVMCreateBuilder()
-      };
-    
       let procedure_body = self.procedure_body(&mut builder, scope, &return_type.r#type);
       if let ParserResult::Success(_) = procedure_body {
         return procedure_body;
@@ -285,7 +286,7 @@ impl <'a>Parser<'a> {
     } else { procedure_header.print(); return procedure_header;}
   }
   
-  pub fn procedure_header(&mut self, scope: &Scope) -> ParserResult {
+  pub fn procedure_header(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope) -> ParserResult {
     let procedure_kw = self.parse_tok(tokens::procedure_kw::ProcedureKW::start());
     if let ParserResult::Success(_) = procedure_kw {
     
@@ -320,37 +321,40 @@ impl <'a>Parser<'a> {
                 // set the type of token to procedure
                 procedure_id.r#type = procedure_type;
                 
+                // build the return type
+                let mut ret_type;
+                let mut params_type;
+                
+                if let Type::Procedure(params, ret) = &procedure_id.r#type {
+                  ret_type = get_llvm_type(ret);
+                  
+                  let mut types = vec![];
+                  
+                  for param in params {
+                    types.push(get_llvm_type(param));
+                  }
+                  
+                  params_type = types.as_mut_ptr();
+                  
+                } else {
+                  return ParserResult::ErrInvalidType{line_num: procedure_id.line_num,
+                                                      expected: vec![Type::Procedure(vec![], Box::new(Type::None))],
+                                                      actual: procedure_id.r#type};
+                };
+                
+                
                 // build the llvm function
                 procedure_id.value_ref = unsafe {
-                
-                  // build the return type
-                  let mut ret_type;
-                  let mut params_type;
-                  
-                  if let Type::Procedure(params, ret) = &procedure_id.r#type {
-                    ret_type = Parser::get_llvm_type(ret);
-                    
-                    let mut types = vec![];
-                    
-                    for param in params {
-                      types.push(Parser::get_llvm_type(param));
-                    }
-                    
-                    params_type = types.as_mut_ptr();
-                    
-                  } else {
-                    return ParserResult::ErrInvalidType{line_num: procedure_id.line_num,
-                                                        expected: vec![Type::Procedure(vec![], Box::new(Type::None))],
-                                                        actual: procedure_id.r#type};
-                  };
-                  
-                  
                   // build the function type
                   let func_type = core::LLVMFunctionType(ret_type, params_type, 0, 0);
                 
                   // add the function to the module
                   let func_name = c_str(&procedure_id.chars[..]);
                   let f = core::LLVMAddFunction(self.llvm_module, func_name, func_type);
+                  
+                  // set up basic block and builder for this function
+                  let block = core::LLVMAppendBasicBlock(f, c_str("block"));
+                  core::LLVMPositionBuilderAtEnd(*builder, block);
                   
                   f
                 };
@@ -690,12 +694,25 @@ impl <'a>Parser<'a> {
           }
         };
         
+        let llvm_procedure = procedure.value_ref.clone();
+        
         // parse optional argument list (includes checking types)
         self.argument_list(builder, procedure_params.iter());
         
         let r_paren = self.parse_tok(tokens::parens::RParen::start());
         if let ParserResult::Success(entry) = &r_paren {
           procedure_id.r#type = procedure_ret;
+          
+          
+          // llvm function call
+          unsafe {
+          
+            // debugging: argument is always 'true'
+            let args = [LLVMConstInt(core::LLVMInt32Type(), 1, 0)].as_mut_ptr();
+            
+            core::LLVMBuildCall(*builder, llvm_procedure, args, 1, null_str());
+          }
+          
           return ParserResult::Success(procedure_id);
         } else { return r_paren; }
       } else { return l_paren; }
@@ -1425,12 +1442,18 @@ impl <'a>Parser<'a> {
     if let ParserResult::Success(return_entry) = return_kw {
       let expression = self.expression(builder, return_type);
       if let ParserResult::Success(expr_entry) = &expression {
-        // check that that the expression type is compatible with bool
+        // check that that the expression type is compatible with expected type
         if !Parser::is_compatible(&return_type, &expr_entry.r#type) {
           return ParserResult::ErrInvalidType{line_num: return_entry.line_num,
                                               expected: vec![return_type.clone()],
                                               actual: expr_entry.r#type.clone()};
         }
+        
+        // debugging: return 0. In the future, will return the expression value
+        let ret = unsafe {
+          core::LLVMBuildRet(*builder, LLVMConstInt(core::LLVMInt32Type(), 0, 0))
+        };
+        
       }
       return expression;
       
@@ -1565,23 +1588,6 @@ impl <'a>Parser<'a> {
       Token::BoolKW(_) => Type::Bool,
       _ => Type::None
     };
-  }
-  
-  // return the llvm type based on the type
-  pub fn get_llvm_type(t: &Type) -> LLVMTypeRef {
-    unsafe {
-      return match t {
-        Type::Integer => core::LLVMInt32Type(),
-        Type::Float => core::LLVMFloatType(),
-        Type::String => core::LLVMPointerType(core::LLVMInt32Type(), 0),
-        Type::Bool =>  core::LLVMInt32Type(),
-        Type::None => core::LLVMVoidType(),
-        _ => {
-          println!("type '{}' not supported yet", t.to_string());
-          core::LLVMVoidType()
-        }
-      };
-    }
   }
   
   pub fn get_symbol(&self, name: &String) -> Option<&TokenEntry> {

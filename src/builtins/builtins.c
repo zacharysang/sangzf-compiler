@@ -8,15 +8,17 @@
 */
 
 // Boolean functions
-void putBool(int val) {
+int putbool(int val) {
   if (val != 0) {
     printf("true\n");
   } else {
     printf("false\n");
   }
+  
+  return 0;
 }
 
-int getBool() {
+int getbool() {
   const int MAX_LEN = 1;
 
   char input[MAX_LEN];
@@ -33,11 +35,13 @@ int getBool() {
 }
 
 // Integer functions
-void putInteger(int* val) {
+int putinteger(int* val) {
   printf("%d\n", *val);
+  
+  return 0;
 }
 
-int getInteger() {
+int getinteger() {
   const int MAX_LEN = 256;
   char input[MAX_LEN];
   fgets(input, MAX_LEN, stdin);

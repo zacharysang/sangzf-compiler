@@ -12,7 +12,7 @@ pub fn initialize_bool_funcs(module: *mut llvm_sys::LLVMModule) -> (TokenEntry, 
 
 fn initialize_get_bool(module: *mut llvm_sys::LLVMModule) -> TokenEntry {
 
-  let name = "getBool";
+  let name = "getbool";
 
   let ret_type = unsafe { core::LLVMInt32Type() };
   let params_type = [].as_mut_ptr();
@@ -35,9 +35,9 @@ fn initialize_get_bool(module: *mut llvm_sys::LLVMModule) -> TokenEntry {
 
 fn initialize_put_bool(module: *mut llvm_sys::LLVMModule) -> TokenEntry {
 
-  let name = "putBool";
+  let name = "putbool";
 
-  let ret_type = unsafe { core::LLVMVoidType() };
+  let ret_type = unsafe { core::LLVMInt32Type() };
   let params_type = unsafe {[core::LLVMInt32Type()].as_mut_ptr()};
   let put_bool_func_type = unsafe {
     core::LLVMFunctionType(ret_type, params_type, 1, 0)
@@ -51,7 +51,7 @@ fn initialize_put_bool(module: *mut llvm_sys::LLVMModule) -> TokenEntry {
     chars: String::from(name),
     tok_type: Token::Unknown(tokens::unknown::Unknown{state: None}), // since not from lexer
     line_num: 0,
-    r#type: Type::Procedure(vec![Box::new(Type::Bool)], Box::new(Type::None)),
+    r#type: Type::Procedure(vec![Box::new(Type::Bool)], Box::new(Type::Bool)),
     value_ref: put_bool_func
   };
 }

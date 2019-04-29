@@ -15,6 +15,11 @@ use std::mem;
 use std::u64;
 use std::ffi::{CStr, CString};
 
+use llvm_sys::core;
+use llvm_sys::prelude::*;
+
+use crate::tokenize::token::{Type};
+
 // function to quickly create c strings from dynamic rust string slices
 pub fn c_str(slice: &str) -> *const i8 {
   return CString::new(slice).expect("could not get c-string from slice").into_raw();
@@ -30,4 +35,21 @@ pub fn error_buffer() -> *mut *mut i8 {
     zero = mem::zeroed();
   }
   return &mut zero.as_mut_ptr();
+}
+
+// return the llvm type based on the type
+pub fn get_llvm_type(t: &Type) -> LLVMTypeRef {
+  unsafe {
+    return match t {
+      Type::Integer => core::LLVMInt32Type(),
+      Type::Float => core::LLVMFloatType(),
+      Type::String => core::LLVMPointerType(core::LLVMInt32Type(), 0),
+      Type::Bool =>  core::LLVMInt32Type(),
+      Type::None => core::LLVMVoidType(),
+      _ => {
+        println!("type '{}' not supported yet", t.to_string());
+        core::LLVMVoidType()
+      }
+    };
+  }
 }
