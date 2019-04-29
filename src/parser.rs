@@ -708,9 +708,9 @@ impl <'a>Parser<'a> {
           let res = unsafe {
           
             // debugging: argument is always 'true'
-            let arg_list = [LLVMConstInt(core::LLVMInt32Type(), 1, 0)].as_mut_ptr();
+            let mut arg_list = [];
             
-            core::LLVMBuildCall(*builder, llvm_procedure, arg_list, 1, null_str())
+            core::LLVMBuildCall(*builder, llvm_procedure, arg_list.as_mut_ptr(), arg_list.len() as u32, null_str())
           };
           
           procedure_id.value_ref = res;

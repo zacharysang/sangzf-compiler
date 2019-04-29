@@ -19,7 +19,7 @@ int putbool(int val) {
 }
 
 int getbool() {
-  const int MAX_LEN = 1;
+  const int MAX_LEN = 2;
 
   char input[MAX_LEN];
   fgets(input, MAX_LEN, stdin);
@@ -29,7 +29,7 @@ int getbool() {
   } else if (strncmp("0", input, MAX_LEN) == 0) {
     return 0;
   } else {
-    printf("Invalid boolean provided. Defaulting to FALSE");
+    printf("Invalid boolean provided: '%s'. Defaulting to FALSE\n", input);
     return 0;
   }
 }
