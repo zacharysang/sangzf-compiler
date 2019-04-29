@@ -11,8 +11,8 @@ macro_rules! c_str {
 }
 */
 
-//use std::char;
 use std::mem;
+use std::u64;
 use std::ffi::{CStr, CString};
 
 // function to quickly create c strings from dynamic rust string slices
@@ -22,6 +22,14 @@ pub fn c_str(slice: &str) -> *const i8 {
 
 pub fn null_str() -> *const i8 {
     return c_str("");
+}
+
+pub fn get_true() -> u64 {
+  return u64::MAX;
+}
+
+pub fn get_false() -> u64 {
+  return 0;
 }
 
 pub fn error_buffer() -> *mut *mut i8 {
