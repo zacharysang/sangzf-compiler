@@ -68,6 +68,8 @@ impl <'a>Parser<'a> {
     self.symbol_table_chain.push(HashMap::new());
     
     // set up the built-in functions
+    // TODO make this actually work so manually linking isn't required
+    /*
     unsafe {
       if support::LLVMLoadLibraryPermanently(c_str("./src/builtins/builtins.so")) == 0 {
         println!("load library: true");
@@ -75,8 +77,8 @@ impl <'a>Parser<'a> {
         println!("load library: false");
       }
     }
-    let (get_bool, put_bool) = builtins::bool::initialize_bool_funcs(self.llvm_module);
-    
+    */
+    self.add_builtins();
     
     let program_header = self.program_header();
     if let ParserResult::Success(identifier_entry) = program_header {
@@ -103,11 +105,6 @@ impl <'a>Parser<'a> {
       let mut builder = unsafe { 
         let b = core::LLVMCreateBuilder();
         core::LLVMPositionBuilderAtEnd(b, entry);
-        
-        // debugging, call putBool in main
-        let true_arg = [LLVMConstInt(core::LLVMInt32Type(), 1, 0)].as_mut_ptr();
-        
-        core::LLVMBuildCall(b, put_bool, true_arg, 1, null_str());
         
         // terminate the basic block
         core::LLVMBuildRetVoid(b);
@@ -1621,6 +1618,16 @@ impl <'a>Parser<'a> {
         }
       }
     }
+  }
+  
+  pub fn add_builtins(&mut self) {
+    let (get_bool, put_bool) = builtins::bool::initialize_bool_funcs(self.llvm_module);
+    self.add_builtin(get_bool);
+    self.add_builtin(put_bool);
+  }
+  
+  pub fn add_builtin(&mut self, builtin: TokenEntry) {
+    self.add_symbol(&Scope::Global, Rc::new(builtin));
   }
   
   fn is_compatible(expected_type: &Type, actual_type: &Type) -> bool {

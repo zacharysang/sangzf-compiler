@@ -29,7 +29,7 @@ After you have cloned this repo, following the following steps to build and run 
 ## Running compiled code
 After you have run the compiler, you will have a file named `<program_name>.bc` containing llvm bitcode. The following steps will obtain from this an executable file.
 1. Run `llc -filetype=obj <program_name>.bc`. This will output an object file, `<program_name>.o`.
-2. Run `gcc -o <desired_executable_name> <program_name>.o`. This should output the executable file.
+2. Run `gcc -o <desired_executable_name> <program_name>.o src/builtins/builtins.o` to link the program with builtins and output the executable.
 
 ## Uninstalling rust
 If you'd like to remove rust from your machine, simply run: `rustup self uninstall`.
