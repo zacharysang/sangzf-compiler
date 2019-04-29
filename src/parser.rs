@@ -697,21 +697,23 @@ impl <'a>Parser<'a> {
         let llvm_procedure = procedure.value_ref.clone();
         
         // parse optional argument list (includes checking types)
-        self.argument_list(builder, procedure_params.iter());
+        let mut arg_list = vec![];
+        self.argument_list(builder, &mut arg_list, procedure_params.iter());
         
         let r_paren = self.parse_tok(tokens::parens::RParen::start());
         if let ParserResult::Success(entry) = &r_paren {
           procedure_id.r#type = procedure_ret;
           
-          
           // llvm function call
-          unsafe {
+          let res = unsafe {
           
             // debugging: argument is always 'true'
-            let args = [LLVMConstInt(core::LLVMInt32Type(), 1, 0)].as_mut_ptr();
+            let arg_list = [LLVMConstInt(core::LLVMInt32Type(), 1, 0)].as_mut_ptr();
             
-            core::LLVMBuildCall(*builder, llvm_procedure, args, 1, null_str());
-          }
+            core::LLVMBuildCall(*builder, llvm_procedure, arg_list, 1, null_str())
+          };
+          
+          procedure_id.value_ref = res;
           
           return ParserResult::Success(procedure_id);
         } else { return r_paren; }
@@ -1244,7 +1246,7 @@ impl <'a>Parser<'a> {
     } else { return arith_op; }
   }
   
-  pub fn argument_list(&mut self, builder: &mut LLVMBuilderRef, mut param_types: Iter<Box<Type>>) -> ParserResult {
+  pub fn argument_list(&mut self, builder: &mut LLVMBuilderRef, arg_list: &mut Vec<LLVMValueRef>, mut param_types: Iter<Box<Type>>) -> ParserResult {
   
     // compare arguments to procedure parameters
     let curr_arg_type;
@@ -1255,11 +1257,14 @@ impl <'a>Parser<'a> {
     }
   
     let expression = self.expression(builder, curr_arg_type);
-    if let ParserResult::Success(..) = expression {
+    if let ParserResult::Success(entry) = &expression {
+    
+      arg_list.push(entry.value_ref);
+    
       // optionally parse the rest
       let comma = self.parse_tok(tokens::comma::Comma::start());
       if let ParserResult::Success(..) = comma {
-        return self.argument_list(builder, param_types);
+        return self.argument_list(builder, arg_list, param_types);
       }
       
       return expression;
