@@ -1,9 +1,15 @@
 #include <stdio.h>
 #include <string.h>
 
+/* To build:
+    * gcc -c -Wall -Werror -fpic builtins.c
+    * gcc -shared -o builtins.so builtins.o
+
+*/
+
 // Boolean functions
-void putBool(int* val) {
-  if (*val == 0) {
+void putBool(int val) {
+  if (val != 0) {
     printf("true\n");
   } else {
     printf("false\n");
@@ -45,6 +51,3 @@ int getInteger() {
 // Float functions
 
 // String functions
-
-// main
-int main() {return 0;}

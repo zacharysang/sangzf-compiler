@@ -69,7 +69,11 @@ impl <'a>Parser<'a> {
     
     // set up the built-in functions
     unsafe {
-      support::LLVMLoadLibraryPermanently(c_str("./builtins/builtins.so"));
+      if support::LLVMLoadLibraryPermanently(c_str("./src/builtins/builtins.so")) == 0 {
+        println!("load library: true");
+      } else {
+        println!("load library: false");
+      }
     }
     let (get_bool, put_bool) = builtins::bool::initialize_bool_funcs(self.llvm_module);
     
@@ -101,7 +105,7 @@ impl <'a>Parser<'a> {
         core::LLVMPositionBuilderAtEnd(b, entry);
         
         // debugging, call putBool in main
-        let true_arg = [LLVMConstInt(core::LLVMInt32Type(), 0, 0 as i32)].as_mut_ptr();
+        let true_arg = [LLVMConstInt(core::LLVMInt32Type(), 1, 0)].as_mut_ptr();
         
         core::LLVMBuildCall(b, put_bool, true_arg, 1, null_str());
         
