@@ -24,14 +24,6 @@ pub fn null_str() -> *const i8 {
     return c_str("");
 }
 
-pub fn get_true() -> u64 {
-  return u64::MAX;
-}
-
-pub fn get_false() -> u64 {
-  return 0;
-}
-
 pub fn error_buffer() -> *mut *mut i8 {
   let mut zero: [i8; 256];
   unsafe {

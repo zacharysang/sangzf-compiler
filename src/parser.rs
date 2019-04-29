@@ -25,7 +25,7 @@ use crate::tokenize::token::TokenEntry;
 use crate::tokenize::token::Type;
 
 use crate::builtins;
-use crate::llvm_utils::{c_str, null_str, error_buffer, get_true, get_false};
+use crate::llvm_utils::{c_str, null_str, error_buffer};
 
 use crate::tokens;
 
@@ -105,7 +105,7 @@ impl <'a>Parser<'a> {
         core::LLVMPositionBuilderAtEnd(b, entry);
         
         // debugging, call putBool in main
-        let true_arg = [LLVMConstInt(core::LLVMInt32Type(), get_false(), 0)].as_mut_ptr();
+        let true_arg = [LLVMConstInt(core::LLVMInt32Type(), 1, 0)].as_mut_ptr();
         
         core::LLVMBuildCall(b, put_bool, true_arg, 1, null_str());
         
