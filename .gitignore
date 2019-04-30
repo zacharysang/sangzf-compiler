@@ -2,6 +2,7 @@
 *
 !*.*
 !*/
+!Makefile
 
 # ignore build files
 target
