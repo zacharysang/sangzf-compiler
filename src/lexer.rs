@@ -12,6 +12,7 @@ use crate::tokens;
 
 // import llvm dependencies
 use llvm_sys::core;
+use crate::llvm_utils;
 
 pub struct Lexer<'a> {
   pub program: Peekable<Chars<'a>>,
@@ -222,12 +223,22 @@ impl <'a> Iterator for Lexer<'a> {
           if let Token::MultilineComment(_tok) = &tok_type {
             is_comment = true;
           }
+          
+          let next_tok_type = Lexer::get_type(&tok_type, &chars);
+          let next_tok_val = match llvm_utils::get_llvm_value(&chars, &next_tok_type) {
+            Ok(val) => val,
+            Err(err) => {
+              println!("Error getting llvm value from token chars: {}", err);
+              unsafe { core::LLVMConstInt(core::LLVMInt32Type(), 0, 0) }
+            }
+          };
         
           next_token = Some(TokenEntry {
                               line_num: self.line_num,
-                              r#type: Lexer::get_type(&tok_type, &chars),
-                              chars: chars, tok_type: tok_type,
-                              value_ref: unsafe { core::LLVMConstInt(core::LLVMInt32Type(), 0, 0) }
+                              r#type: next_tok_type,
+                              chars: chars,
+                              tok_type: tok_type,
+                              value_ref: next_tok_val
           });
         }
     

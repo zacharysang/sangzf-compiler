@@ -2,9 +2,8 @@ extern crate llvm_sys;
 
 // import llvm dependencies
 use llvm_sys::prelude::*;
-use llvm_sys::{core, target, bit_writer, analysis, support};
 use llvm_sys::core::*;
-use std::ptr;
+use llvm_sys::{core, bit_writer, analysis, support};
 
 // llvm references used as guides
 // * introduction to building llvm program using c-apis: https://pauladamsmith.com/blog/2015/01/how-to-get-started-with-llvm-c-api.html
@@ -706,10 +705,6 @@ impl <'a>Parser<'a> {
           
           // llvm function call
           let res = unsafe {
-          
-            // debugging: argument is always 'true'
-            let mut arg_list = [];
-            
             core::LLVMBuildCall(*builder, llvm_procedure, arg_list.as_mut_ptr(), arg_list.len() as u32, null_str())
           };
           
@@ -1454,9 +1449,8 @@ impl <'a>Parser<'a> {
                                               actual: expr_entry.r#type.clone()};
         }
         
-        // debugging: return 0. In the future, will return the expression value
         let ret = unsafe {
-          core::LLVMBuildRet(*builder, LLVMConstInt(core::LLVMInt32Type(), 0, 0))
+          core::LLVMBuildRet(*builder, expr_entry.value_ref)
         };
         
       }
@@ -1556,7 +1550,10 @@ impl <'a>Parser<'a> {
         } else {
           return ParserResult::ErrUnexpectedEnd;
         }
-      } else { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from(target.get_example()), actual: String::from(&tok_entry.chars[..])}; }
+      } else { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num,
+                                                      expected: String::from(target.get_example()),
+                                                      actual: String::from(&tok_entry.chars[..])};
+      }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   

@@ -5,7 +5,8 @@ variable r2 : bool;
 
 begin
 
-r1 := getbool();
+r1 := getBool();
+r2 := putBool(r1);
 
 /*Single #Line Block Comments*/
 
