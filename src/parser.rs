@@ -1635,6 +1635,14 @@ impl <'a>Parser<'a> {
     let (get_bool, put_bool) = builtins::bool::initialize_bool_funcs(self.llvm_module);
     self.add_builtin(get_bool);
     self.add_builtin(put_bool);
+    
+    let (get_integer, put_integer) = builtins::integer::initialize_integer_funcs(self.llvm_module);
+    self.add_builtin(get_integer);
+    self.add_builtin(put_integer);
+    
+    let (get_float, put_float) = builtins::float::initialize_float_funcs(self.llvm_module);
+    self.add_builtin(get_float);
+    self.add_builtin(put_float);
   }
   
   pub fn add_builtin(&mut self, builtin: TokenEntry) {

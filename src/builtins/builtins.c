@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 
-/* To build:
+/* 
+  To build:
     * gcc -c -Wall -Werror -fpic builtins.c
     * gcc -shared -o builtins.so builtins.o
-
 */
 
 // Boolean functions
@@ -35,23 +35,47 @@ int getbool() {
 }
 
 // Integer functions
-int putinteger(int* val) {
-  printf("%d\n", *val);
+int putinteger(int val) {
+  printf("%d\n", val);
   
   return 0;
 }
 
 int getinteger() {
-  const int MAX_LEN = 256;
-  char input[MAX_LEN];
-  fgets(input, MAX_LEN, stdin);
-	
-  int output[1];
-  sscanf(input, "%d", output);
+  int output;
+  scanf("%d *[^\n]", &output);
 
-  return *output;
+  return output;
 }
 
 // Float functions
+int putfloat(float val) {
+  printf("%f\n", val);
+  
+  return 0;
+}
+
+float getfloat() {
+  float output;
+  scanf("%f *[^\n]", &output);
+  
+  return output;
+}
 
 // String functions
+/*
+int putstring(char* val) {
+  printf("%s\n", val);
+  
+  return 0;
+}
+
+char* getstring() {
+  const int MAX_LEN = 512;
+  
+  char buff[MAX_LEN];
+  fgets(buff, MAX_LEN, stdin);
+  
+  return buff;
+}
+*/
