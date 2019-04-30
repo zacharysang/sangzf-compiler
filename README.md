@@ -29,7 +29,7 @@ After you have cloned this repo, following the following steps to build and run 
 ## Running compiled code
 After you have run the compiler, you will have a file named `<program_name>.bc` containing llvm bitcode. The following steps will obtain from this an executable file.
 1. Run `llc -filetype=obj <program_name>.bc`. This will output an object file, `<program_name>.o`.
-2. Run `gcc -o <desired_executable_name> <program_name>.o`. This should output the executable file.
+2. Run `gcc -o <desired_executable_name> <program_name>.o src/builtins/builtins.o` to link the program with builtins and output the executable.
 
 ## Uninstalling rust
 If you'd like to remove rust from your machine, simply run: `rustup self uninstall`.
@@ -115,3 +115,13 @@ combination being applied (i.e. comparison, addition, division, etc.). If an
 incompatible type is found, then an error ParserResult struct is passed through 
 to the top to be printed at the statement  level. At the statement level, 
 it is asserted that the expression's resolved type matches the type expected by the statement.
+
+## Code generation
+
+For code generation I used the [llvm_sys](http://rustdoc.taricorp.net/llvm-sys/llvm_sys/) rust crate (library).
+This wraps around the llvm c api. Because Rust does provide raw pointer types for this kind of integration, 
+my compiler is able to make calls into the llvm api and get back various llvm objects. 
+At first in this process I found confusing about this process is when to use rust-style references and c-style 
+raw pointers which are both present in Rust. On one hand, using Rust references allows values to be 
+considered by the borrow checker leading to improved safety, but raw references are required to conform to llvm_sys'
+apis.

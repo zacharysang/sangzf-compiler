@@ -3,11 +3,16 @@ use crate::tokenize::lexable::Lexable;
 
 use crate::tokens;
 
+// import llvm dependencies
+use llvm_sys::prelude::*;
+use llvm_sys::{core};
+
 pub struct TokenEntry {
   pub chars: String,
   pub tok_type: Token,
   pub line_num: u32,
-  pub r#type: Type
+  pub r#type: Type,
+  pub value_ref: LLVMValueRef
 }
 
 impl TokenEntry {
@@ -16,7 +21,8 @@ impl TokenEntry {
       chars: String::from(""),
       tok_type: Token::Unknown(tokens::unknown::Unknown{state: None}),
       line_num: 0,
-      r#type: Type::None
+      r#type: Type::None,
+      value_ref: unsafe { core::LLVMConstInt(core::LLVMInt32Type(), 0, 0) }
     }
   }
 }
@@ -250,7 +256,7 @@ impl Token {
 pub enum Type {
   None,
   Procedure(Vec<Box<Type>>,Box<Type>),
-  Type,
+  Type(Box<Type>), // TODO add support for resolving type
   Enum,
   Integer,
   Float,
@@ -282,7 +288,13 @@ impl ToString for Type {
         String::from(proc_str)
         
       },
-      Type::Type => String::from("type"),
+      Type::Type(resolve) => {
+        let mut type_str = String::from("type(");
+        type_str.push_str(&resolve.to_string());
+        type_str.push_str(")");
+        
+        type_str
+      },
       Type::Enum => String::from("enum"),
       Type::Integer => String::from("integer"),
       Type::Float => String::from("float"),

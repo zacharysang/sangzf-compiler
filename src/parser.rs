@@ -2,7 +2,9 @@ extern crate llvm_sys;
 
 // import llvm dependencies
 use llvm_sys::prelude::*;
-use llvm_sys::{core, target, bit_writer, analysis};
+use llvm_sys::{core, target, bit_writer, analysis, support};
+use llvm_sys::core::*;
+use std::ptr;
 
 // llvm references used as guides
 // * introduction to building llvm program using c-apis: https://pauladamsmith.com/blog/2015/01/how-to-get-started-with-llvm-c-api.html
@@ -22,22 +24,11 @@ use crate::tokenize::token::Token;
 use crate::tokenize::token::TokenEntry;
 use crate::tokenize::token::Type;
 
+use crate::builtins;
+use crate::llvm_utils::{c_str, null_str, error_buffer, get_llvm_type};
+
 use crate::tokens;
 
-// macro to quickly create c strings from rust string literals
-// source: https://gist.githubusercontent.com/jayphelps/ee06dad051eb30d10982535958ad059a/raw/eeb9a68eb0fb9653a4b3af40dee75c4558d43238/main.rs
-// usage: c_str!("hello, world.")
-macro_rules! c_str {
-    ($s:expr) => (
-        // take s and add a null-termination and get as ptr encoded in utf8
-        concat!($s, "\0").as_ptr() as *const i8
-    );
-}
-
-// function to quickly create c strings from dynamic rust string slices
-fn c_str(slice: &str) -> *const i8 {
-  return slice.as_ptr() as *const i8
-}
 
 pub struct Parser<'a> {
   pub lexer: Peekable<Lexer<'a>>,
@@ -57,7 +48,7 @@ impl <'a>Parser<'a> {
       lexer: lexer.peekable(),
       symbol_table_chain: symbol_table_chain,
       global_symbol_table: HashMap::new(),
-      llvm_module: unsafe { core::LLVMModuleCreateWithName(c_str!("compiler_module")) }
+      llvm_module: unsafe { core::LLVMModuleCreateWithName(c_str("compiler_module")) }
     };
     
     return parser;
@@ -76,6 +67,19 @@ impl <'a>Parser<'a> {
     // create a global symbol table
     self.symbol_table_chain.push(HashMap::new());
     
+    // set up the built-in functions
+    // TODO make this actually work so manually linking isn't required
+    /*
+    unsafe {
+      if support::LLVMLoadLibraryPermanently(c_str("./src/builtins/builtins.so")) == 0 {
+        println!("load library: true");
+      } else {
+        println!("load library: false");
+      }
+    }
+    */
+    self.add_builtins();
+    
     let program_header = self.program_header();
     if let ParserResult::Success(identifier_entry) = program_header {
     
@@ -92,38 +96,40 @@ impl <'a>Parser<'a> {
       let program_type = unsafe { core::LLVMFunctionType(program_ret_type, program_param_types, 0, 0) };
       
       // create main program function (type: core::LLVMValueRef)
-      let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str!("main"), program_type) };
+      let program = unsafe { core::LLVMAddFunction(self.llvm_module, c_str("main"), program_type) };
       
       // add basic block to the program function (type: core::LLVMBasicBlockRef)
       let entry = unsafe { core::LLVMAppendBasicBlock(program, c_str("entry")) };
-      
       
       // create builder and position it at the end of basic block (type: LLVMBuilderRef)
       let mut builder = unsafe { 
         let b = core::LLVMCreateBuilder();
         core::LLVMPositionBuilderAtEnd(b, entry);
         
-        // terminate the basic block
-        core::LLVMBuildRetVoid(b);
-        
         b
       };
-    
-      /*
-      // verify the module
-      unsafe {
-        let mut error: *mut *mut i8;
-        analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
-      }
-      */
     
       let program_body = self.program_body(&mut builder);
       if let ParserResult::Success(_) = program_body {
       
+        // build the return
+        unsafe {
+          core::LLVMBuildRetVoid(builder);
+        }
+      
+        // verify the module
+        unsafe {
+          let mut error: *mut *mut i8 = error_buffer();
+          analysis::LLVMVerifyModule(self.llvm_module, analysis::LLVMVerifierFailureAction::LLVMAbortProcessAction, error);
+          
+          core::LLVMDisposeMessage(*error);
+        }
+      
+        let mut filename = identifier_entry.chars;
+        filename.push_str(".bc");
+      
         // output contents of llvm program
         unsafe {
-          let mut filename = identifier_entry.chars;
-          filename.push_str(".bc");
           if bit_writer::LLVMWriteBitcodeToFile(self.llvm_module, c_str(&filename)) != 0 {
             println!("error writing bitcode to file, skipping\n");
           }
@@ -213,7 +219,7 @@ impl <'a>Parser<'a> {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
               // if able to parse a statement, parse a terminating semicolon
               // program doesn't have a return type so neither program statements
-              let statement = self.statement(&Type::None);
+              let statement = self.statement(builder, &Type::None);
               self.resync();
             },
             _ => break
@@ -266,16 +272,21 @@ impl <'a>Parser<'a> {
   }
   
   pub fn procedure_declaration(&mut self, scope: &Scope) -> ParserResult {
-    let procedure_header = self.procedure_header(scope);
+  
+    let mut builder = unsafe {
+      core::LLVMCreateBuilder()
+    };
+  
+    let procedure_header = self.procedure_header(&mut builder, scope);
     if let ParserResult::Success(return_type) = procedure_header {
-      let procedure_body = self.procedure_body(scope, &return_type.r#type);
+      let procedure_body = self.procedure_body(&mut builder, scope, &return_type.r#type);
       if let ParserResult::Success(_) = procedure_body {
         return procedure_body;
       } else { procedure_body.print(); return procedure_body;}
     } else { procedure_header.print(); return procedure_header;}
   }
   
-  pub fn procedure_header(&mut self, scope: &Scope) -> ParserResult {
+  pub fn procedure_header(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope) -> ParserResult {
     let procedure_kw = self.parse_tok(tokens::procedure_kw::ProcedureKW::start());
     if let ParserResult::Success(_) = procedure_kw {
     
@@ -309,6 +320,44 @@ impl <'a>Parser<'a> {
             
                 // set the type of token to procedure
                 procedure_id.r#type = procedure_type;
+                
+                // build the return type
+                let mut ret_type;
+                let mut params_type;
+                
+                if let Type::Procedure(params, ret) = &procedure_id.r#type {
+                  ret_type = get_llvm_type(ret);
+                  
+                  let mut types = vec![];
+                  
+                  for param in params {
+                    types.push(get_llvm_type(param));
+                  }
+                  
+                  params_type = types.as_mut_ptr();
+                  
+                } else {
+                  return ParserResult::ErrInvalidType{line_num: procedure_id.line_num,
+                                                      expected: vec![Type::Procedure(vec![], Box::new(Type::None))],
+                                                      actual: procedure_id.r#type};
+                };
+                
+                
+                // build the llvm function
+                procedure_id.value_ref = unsafe {
+                  // build the function type
+                  let func_type = core::LLVMFunctionType(ret_type, params_type, 0, 0);
+                
+                  // add the function to the module
+                  let func_name = c_str(&procedure_id.chars[..]);
+                  let f = core::LLVMAddFunction(self.llvm_module, func_name, func_type);
+                  
+                  // set up basic block and builder for this function
+                  let block = core::LLVMAppendBasicBlock(f, c_str("block"));
+                  core::LLVMPositionBuilderAtEnd(*builder, block);
+                  
+                  f
+                };
                 
                 // Note: Using Rc struct gives immutable multiple ownership
                 // this means that the symbols in the table are immutable
@@ -453,7 +502,7 @@ impl <'a>Parser<'a> {
     return self.variable_declaration(scope);
   }
   
-  pub fn procedure_body(&mut self, scope: &Scope, return_type: &Type) -> ParserResult {
+  pub fn procedure_body(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope, return_type: &Type) -> ParserResult {
   
     // TODO break this out to its own function
     // parse an optional number of declarations delimited by semicolon
@@ -486,7 +535,7 @@ impl <'a>Parser<'a> {
         if let Some(tok_entry) = self.lexer.peek() {
           match &tok_entry.tok_type {
             Token::Identifier(_) | Token::IfKW(_) | Token::ForKW(_) | Token::ReturnKW(_) => {
-              let statement = self.statement(return_type);
+              let statement = self.statement(builder, return_type);
               self.resync();
             },
             _ => break
@@ -586,10 +635,10 @@ impl <'a>Parser<'a> {
         let is_kw = self.parse_tok(tokens::is_kw::IsKW::start());
         if let ParserResult::Success(_) = is_kw {
           let type_mark = self.type_mark();
-          if let ParserResult::Success(_) = type_mark {
+          if let ParserResult::Success(type_entry) = &type_mark {
           
             // change the token entry type
-            type_id.r#type = Type::Type;
+            type_id.r#type = Type::Type(Box::new(Parser::get_type(&type_entry)));
             
             self.add_symbol(scope, Rc::new(type_id));
           
@@ -601,14 +650,14 @@ impl <'a>Parser<'a> {
     
   }
   
-  pub fn statement(&mut self, return_type: &Type) -> ParserResult {
+  pub fn statement(&mut self, builder: &mut LLVMBuilderRef, return_type: &Type) -> ParserResult {
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = peek_tok {
       let result = match &tok_entry.tok_type {
-        Token::Identifier(_) => self.assignment_statement(),
-        Token::IfKW(_) => self.if_statement(return_type),
-        Token::ForKW(_) => self.loop_statement(return_type),
-        Token::ReturnKW(_) => self.return_statement(return_type),
+        Token::Identifier(_) => self.assignment_statement(builder),
+        Token::IfKW(_) => self.if_statement(builder, return_type),
+        Token::ForKW(_) => self.loop_statement(builder, return_type),
+        Token::ReturnKW(_) => self.return_statement(builder, return_type),
         _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(<identifier>|if|for|return)"), actual: String::from(&tok_entry.chars[..])} }
       };
       
@@ -622,13 +671,13 @@ impl <'a>Parser<'a> {
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn procedure_call_w_identifier(&mut self, identifier: ParserResult, resolve_type: &Type) -> ParserResult {
+  pub fn procedure_call_w_identifier(&mut self, builder: &mut LLVMBuilderRef, identifier: ParserResult, resolve_type: &Type) -> ParserResult {
     if let ParserResult::Success(mut procedure_id) = identifier {
     
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
       if let ParserResult::Success(_) = l_paren {
         
-        // look up the procedure
+        // look up the procedure (token_entry)
         let procedure = match self.get_symbol(&procedure_id.chars) {
           Some(val) => val,
           None => return ParserResult::ErrSymbolNotFound{name: String::from(&procedure_id.chars[..]), line_num: procedure_id.line_num}
@@ -645,12 +694,27 @@ impl <'a>Parser<'a> {
           }
         };
         
+        let llvm_procedure = procedure.value_ref.clone();
+        
         // parse optional argument list (includes checking types)
-        self.argument_list(procedure_params.iter());
+        let mut arg_list = vec![];
+        self.argument_list(builder, &mut arg_list, procedure_params.iter());
         
         let r_paren = self.parse_tok(tokens::parens::RParen::start());
         if let ParserResult::Success(entry) = &r_paren {
           procedure_id.r#type = procedure_ret;
+          
+          // llvm function call
+          let res = unsafe {
+          
+            // debugging: argument is always 'true'
+            let mut arg_list = [];
+            
+            core::LLVMBuildCall(*builder, llvm_procedure, arg_list.as_mut_ptr(), arg_list.len() as u32, null_str())
+          };
+          
+          procedure_id.value_ref = res;
+          
           return ParserResult::Success(procedure_id);
         } else { return r_paren; }
       } else { return l_paren; }
@@ -658,14 +722,14 @@ impl <'a>Parser<'a> {
   }
   
   // this is currently unused since procedure calls currently only occur ambiguously with names (in the factor parse rule)
-  pub fn procedure_call(&mut self, resolve_type: &Type) -> ParserResult {
+  pub fn procedure_call(&mut self, builder: &mut LLVMBuilderRef, resolve_type: &Type) -> ParserResult {
   
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-    return self.procedure_call_w_identifier(identifier, resolve_type);
+    return self.procedure_call_w_identifier(builder, identifier, resolve_type);
     
   }
   
-  pub fn name_w_identifier(&mut self, mut identifier: ParserResult) -> ParserResult {
+  pub fn name_w_identifier(&mut self, builder: &mut LLVMBuilderRef, mut identifier: ParserResult) -> ParserResult {
     if let ParserResult::Success(id_entry) = &mut identifier {
     
       // make sure the identifier exists
@@ -689,7 +753,7 @@ impl <'a>Parser<'a> {
           self.lexer.next();
           
           let arr_idx_type = Type::Integer;
-          let expression = self.expression(&arr_idx_type);
+          let expression = self.expression(builder, &arr_idx_type);
           if let ParserResult::Success(_) = expression {
             let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
             if let ParserResult::Success(_) = r_bracket {
@@ -711,19 +775,19 @@ impl <'a>Parser<'a> {
     } else { return identifier; }
   }
   
-  pub fn name(&mut self) -> ParserResult {
+  pub fn name(&mut self, builder: &mut LLVMBuilderRef) -> ParserResult {
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
-    return self.name_w_identifier(identifier);
+    return self.name_w_identifier(builder, identifier);
   }
   
-  pub fn term(&mut self, resolve_type: &Type) -> ParserResult {
+  pub fn term(&mut self, builder: &mut LLVMBuilderRef, resolve_type: &Type) -> ParserResult {
   
     // define function for factored parse rule
-    fn _term<'a>(slf: &mut Parser<'a>, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
+    fn _term<'a>(slf: &mut Parser<'a>, builder: &mut LLVMBuilderRef, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
       // accept either a '*' or '/'
       let asterisk = slf.parse_tok(tokens::asterisk::Asterisk::start());
       if let ParserResult::Success(_) = asterisk {
-        let factor = slf.factor(resolve_type);
+        let factor = slf.factor(builder, resolve_type);
         if let ParserResult::Success(factor_entry) = factor {
         
           // ensure that left and factor are integer or float (both compatible with float)
@@ -744,13 +808,13 @@ impl <'a>Parser<'a> {
             left.line_num = factor_entry.line_num;
           }
         
-          return _term(slf, resolve_type, left);
+          return _term(slf, builder, resolve_type, left);
         } else { return factor; }
       }
       
       let slash = slf.parse_tok(tokens::slash::Slash::start());
       if let ParserResult::Success(_) = slash {
-        let factor = slf.factor(resolve_type);
+        let factor = slf.factor(builder, resolve_type);
         if let ParserResult::Success(factor_entry) = factor {
         
           // ensure that left and factor_entry types are compatible here
@@ -771,7 +835,7 @@ impl <'a>Parser<'a> {
             left.line_num = factor_entry.line_num;
           }
         
-          return _term(slf, resolve_type, left);
+          return _term(slf, builder, resolve_type, left);
         } else { return factor; }
       }
       
@@ -782,15 +846,15 @@ impl <'a>Parser<'a> {
     }
   
     // read bottomed-out factor rule
-    let factor = self.factor(resolve_type);
+    let factor = self.factor(builder, resolve_type);
     if let ParserResult::Success(left) = factor {
-      return _term(self, resolve_type, left);
+      return _term(self, builder, resolve_type, left);
     } else { return factor; }
     
   }
   
-  pub fn relation(&mut self, resolve_type: &Type) -> ParserResult {
-    fn _relation<'a>(slf: &mut Parser<'a>, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
+  pub fn relation(&mut self, builder: &mut LLVMBuilderRef, resolve_type: &Type) -> ParserResult {
+    fn _relation<'a>(slf: &mut Parser<'a>, builder: &mut LLVMBuilderRef, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
     
       let int_type = Type::Integer;
       let string_type = Type::String;
@@ -801,7 +865,7 @@ impl <'a>Parser<'a> {
           Token::LT(_) => {
             let lt = slf.parse_tok(tokens::lt::LT::start());
             if let ParserResult::Success(lt_entry) = lt {
-              let term = slf.term(resolve_type);
+              let term = slf.term(builder, resolve_type);
               if let ParserResult::Success(term_entry) = term {
               
                 if !Parser::is_compatible(&int_type, &left.r#type) {
@@ -822,14 +886,14 @@ impl <'a>Parser<'a> {
                 left.r#type = Type::Bool;
                 left.line_num = term_entry.line_num;
               
-                return _relation(slf, resolve_type, left);
+                return _relation(slf, builder, resolve_type, left);
               } else { return term; }
             } else { return lt; }
           },
           Token::GTE(_) => {
             let gte = slf.parse_tok(tokens::gte::GTE::start());
             if let ParserResult::Success(gte_entry) = gte {
-              let term = slf.term(resolve_type);
+              let term = slf.term(builder, resolve_type);
               if let ParserResult::Success(term_entry) = term {
               
                 // check that left and term_entry have compatible types
@@ -850,14 +914,14 @@ impl <'a>Parser<'a> {
                 left.r#type = Type::Bool;
                 left.line_num = term_entry.line_num;
               
-                return _relation(slf, resolve_type, left);
+                return _relation(slf, builder, resolve_type, left);
               } else { return term; }
             } else { return gte; }
           },
           Token::LTE(_) => {
             let lte = slf.parse_tok(tokens::lte::LTE::start());
             if let ParserResult::Success(lte_entry) = lte {
-              let term = slf.term(resolve_type);
+              let term = slf.term(builder, resolve_type);
               if let ParserResult::Success(term_entry) = term {
               
                 // check that left and term_entry have compatible types
@@ -878,14 +942,14 @@ impl <'a>Parser<'a> {
                 left.r#type = Type::Bool;
                 left.line_num = term_entry.line_num;
               
-                return _relation(slf, resolve_type, left);
+                return _relation(slf, builder, resolve_type, left);
               } else { return term; }
             } else { return lte; }
           },
           Token::GT(_) => {
             let gt = slf.parse_tok(tokens::gt::GT::start());
             if let ParserResult::Success(gt_entry) = gt {
-              let term = slf.term(resolve_type);
+              let term = slf.term(builder, resolve_type);
               if let ParserResult::Success(term_entry) = term {
                 // check that term_entry type is compatible with left (so that a comparison is possible)
                 if !Parser::is_compatible(&int_type, &left.r#type) {
@@ -905,14 +969,14 @@ impl <'a>Parser<'a> {
                 left.r#type = Type::Bool;
                 left.line_num = term_entry.line_num;
               
-                return _relation(slf, resolve_type, left);
+                return _relation(slf, builder, resolve_type, left);
               } else { return term; }
             } else { return gt; }
           },
           Token::EQ(_) => {
             let eq = slf.parse_tok(tokens::eq::EQ::start());
             if let ParserResult::Success(eq_entry) = eq {
-              let term = slf.term(resolve_type);
+              let term = slf.term(builder, resolve_type);
               if let ParserResult::Success(term_entry) = term {
               
                 if !(Parser::is_compatible(&int_type, &left.r#type) || Parser::is_compatible(&string_type, &left.r#type)) {
@@ -932,14 +996,14 @@ impl <'a>Parser<'a> {
                 left.r#type = Type::Bool;
                 left.line_num = term_entry.line_num;
               
-                return _relation(slf, resolve_type, left);
+                return _relation(slf, builder, resolve_type, left);
               } else { return term; }
             } else { return eq; }
           },
           Token::NEQ(_) => {
             let neq = slf.parse_tok(tokens::neq::NEQ::start());
             if let ParserResult::Success(neq_entry) = neq {
-              let term = slf.term(resolve_type);
+              let term = slf.term(builder, resolve_type);
               if let ParserResult::Success(term_entry) = term {
               
                 if !(Parser::is_compatible(&int_type, &left.r#type) || Parser::is_compatible(&string_type, &left.r#type)) {
@@ -959,7 +1023,7 @@ impl <'a>Parser<'a> {
                 left.r#type = Type::Bool;
                 left.line_num = term_entry.line_num;
               
-                return _relation(slf, resolve_type, left);
+                return _relation(slf, builder, resolve_type, left);
               } else { return term; }
             } else { return neq; }
           }
@@ -976,15 +1040,15 @@ impl <'a>Parser<'a> {
       }
     }
     
-    let term = self.term(resolve_type);
+    let term = self.term(builder, resolve_type);
     if let ParserResult::Success(term_entry) = term {
-      let rel = _relation(self, resolve_type, term_entry);
+      let rel = _relation(self, builder, resolve_type, term_entry);
       return rel;
     } else { return term; }
   }
   
-  pub fn arith_op(&mut self, resolve_type: &Type) -> ParserResult {
-    fn _arith_op(slf: &mut Parser, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
+  pub fn arith_op(&mut self, builder: &mut LLVMBuilderRef, resolve_type: &Type) -> ParserResult {
+    fn _arith_op(slf: &mut Parser, builder: &mut LLVMBuilderRef, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
     
       let float_type = Type::Float;
     
@@ -994,7 +1058,7 @@ impl <'a>Parser<'a> {
           Token::Plus(_) => {
             let plus = slf.parse_tok(tokens::plus::Plus::start());
             if let ParserResult::Success(_) = plus {
-              let relation = slf.relation(resolve_type);
+              let relation = slf.relation(builder, resolve_type);
               if let ParserResult::Success(relation_entry) = relation {
               
                 if !Parser::is_compatible(&float_type, &left.r#type) {
@@ -1018,7 +1082,7 @@ impl <'a>Parser<'a> {
                 
                 left.line_num = relation_entry.line_num;
               
-                return _arith_op(slf, resolve_type, left);
+                return _arith_op(slf, builder, resolve_type, left);
               } else {
                 return relation;
               }
@@ -1029,7 +1093,7 @@ impl <'a>Parser<'a> {
           Token::Dash(_) => {
             let dash = slf.parse_tok(tokens::dash::Dash::start());
             if let ParserResult::Success(_) = dash {
-              let relation = slf.relation(resolve_type);
+              let relation = slf.relation(builder, resolve_type);
               if let ParserResult::Success(relation_entry) = relation {
               
                 // check left and relation_entry have the correct types
@@ -1052,7 +1116,7 @@ impl <'a>Parser<'a> {
                 }
                 left.line_num = relation_entry.line_num;
               
-                return _arith_op(slf, resolve_type, left);
+                return _arith_op(slf, builder, resolve_type, left);
               } else {
                 return relation;
               }
@@ -1072,23 +1136,23 @@ impl <'a>Parser<'a> {
     }
     
     // parse the initial relation where the recursion bottoms out
-    let relation = self.relation(resolve_type);
+    let relation = self.relation(builder, resolve_type);
     if let ParserResult::Success(relation_entry) = relation {
-      return _arith_op(self, &Type::Float, relation_entry);
+      return _arith_op(self, builder, &Type::Float, relation_entry);
     } else {
       return relation;
     }
   }
   
-  pub fn expression(&mut self, resolve_type: &Type) -> ParserResult {
-    fn _expression(slf: &mut Parser, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
+  pub fn expression(&mut self, builder: &mut LLVMBuilderRef, resolve_type: &Type) -> ParserResult {
+    fn _expression(slf: &mut Parser, builder: &mut LLVMBuilderRef, resolve_type: &Type, mut left: TokenEntry) -> ParserResult {
       let peek_tok = slf.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         match &tok_entry.tok_type {
           Token::Ampersand(_) => {
             let ampersand = slf.parse_tok(tokens::ampersand::Ampersand::start());
             if let ParserResult::Success(_) = ampersand {
-              let arith_op = slf.arith_op(resolve_type);
+              let arith_op = slf.arith_op(builder, resolve_type);
               if let ParserResult::Success(arith_op_entry) = arith_op {
               
                 // check that arith_op_entyr and left are the same type
@@ -1114,7 +1178,7 @@ impl <'a>Parser<'a> {
                 
                 left.line_num = arith_op_entry.line_num;
               
-                return _expression(slf, resolve_type, left);
+                return _expression(slf, builder, resolve_type, left);
               } else {
                 return arith_op;
               }
@@ -1125,7 +1189,7 @@ impl <'a>Parser<'a> {
           Token::Pipe(_) => {
             let pipe = slf.parse_tok(tokens::pipe::Pipe::start());
             if let ParserResult::Success(_) = pipe {
-              let arith_op = slf.arith_op(resolve_type);
+              let arith_op = slf.arith_op(builder, resolve_type);
               if let ParserResult::Success(arith_op_entry) = arith_op {
               
                 // check that arith_op_entyr and left are the same type
@@ -1151,7 +1215,7 @@ impl <'a>Parser<'a> {
                 
                 left.line_num = arith_op_entry.line_num;
 
-                return _expression(slf, resolve_type, left);
+                return _expression(slf, builder, resolve_type, left);
               } else {
                 return arith_op;
               }
@@ -1176,13 +1240,13 @@ impl <'a>Parser<'a> {
       _ => false
     };
     
-    let arith_op = self.arith_op(resolve_type);
+    let arith_op = self.arith_op(builder, resolve_type);
     if let ParserResult::Success(arith_op_entry) = arith_op {
-      return _expression(self, resolve_type, arith_op_entry);
+      return _expression(self, builder, resolve_type, arith_op_entry);
     } else { return arith_op; }
   }
   
-  pub fn argument_list(&mut self, mut param_types: Iter<Box<Type>>) -> ParserResult {
+  pub fn argument_list(&mut self, builder: &mut LLVMBuilderRef, arg_list: &mut Vec<LLVMValueRef>, mut param_types: Iter<Box<Type>>) -> ParserResult {
   
     // compare arguments to procedure parameters
     let curr_arg_type;
@@ -1192,20 +1256,23 @@ impl <'a>Parser<'a> {
       return ParserResult::Error{line_num: 0, msg: String::from("Expected more arguments")};
     }
   
-    let expression = self.expression(curr_arg_type);
-    if let ParserResult::Success(..) = expression {
+    let expression = self.expression(builder, curr_arg_type);
+    if let ParserResult::Success(entry) = &expression {
+    
+      arg_list.push(entry.value_ref);
+    
       // optionally parse the rest
       let comma = self.parse_tok(tokens::comma::Comma::start());
       if let ParserResult::Success(..) = comma {
-        return self.argument_list(param_types);
+        return self.argument_list(builder, arg_list, param_types);
       }
       
       return expression;
     } else { return expression; }
   }
   
-  pub fn assignment_statement(&mut self) -> ParserResult {
-    let destination = self.destination();
+  pub fn assignment_statement(&mut self, builder: &mut LLVMBuilderRef) -> ParserResult {
+    let destination = self.destination(builder);
     if let ParserResult::Success(dest_id) = destination {
     
       // look up the destination in the symbol table to retrieve the type
@@ -1216,7 +1283,7 @@ impl <'a>Parser<'a> {
       
       let assign = self.parse_tok(tokens::assign::Assign::start());
       if let ParserResult::Success(assign_entry) = assign {
-        let expression = self.expression(&dest_type);
+        let expression = self.expression(builder, &dest_type);
         if let ParserResult::Success(expr_entry) = &expression {
         
           // enforce that the expression type is compatible with destination type
@@ -1232,14 +1299,14 @@ impl <'a>Parser<'a> {
     } else { return destination; }
   }
   
-  pub fn destination(&mut self) -> ParserResult {
+  pub fn destination(&mut self, builder: &mut LLVMBuilderRef) -> ParserResult {
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
     if let ParserResult::Success(_) = identifier {
       // optionally parse an index to this value
       let l_bracket = self.parse_tok(tokens::brackets::LBracket::start());
       if let ParserResult::Success(_) = l_bracket {
         let idx_type = Type::Integer;
-        let expression = self.expression(&idx_type);
+        let expression = self.expression(builder, &idx_type);
         if let ParserResult::Success(_) = expression {
           if let ParserResult::Success(_) = self.parse_tok(tokens::brackets::RBracket::start()) {
             return identifier;
@@ -1254,7 +1321,7 @@ impl <'a>Parser<'a> {
     } else { return identifier; }
   }
   
-  pub fn if_statement(&mut self, return_type: &Type) -> ParserResult {
+  pub fn if_statement(&mut self, builder: &mut LLVMBuilderRef, return_type: &Type) -> ParserResult {
     let if_kw = self.parse_tok(tokens::if_kw::IfKW::start());
     if let ParserResult::Success(_) = if_kw {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
@@ -1262,7 +1329,7 @@ impl <'a>Parser<'a> {
       
         // if statement expressions should evaluate to a boolean
         let if_expr_type = Type::Bool;
-        let expression = self.expression(&if_expr_type);
+        let expression = self.expression(builder, &if_expr_type);
         if let ParserResult::Success(expr_entry) = expression {
           let r_paren = self.parse_tok(tokens::parens::RParen::start());
           if let ParserResult::Success(r_paren_entry) = r_paren {
@@ -1283,7 +1350,7 @@ impl <'a>Parser<'a> {
                   match tok_entry.tok_type {
                     Token::ElseKW(_) | Token::EndKW(_) => break,
                     _ => {
-                      let statement = self.statement(return_type);
+                      let statement = self.statement(builder, return_type);
                       self.resync();
                     }
                   }
@@ -1301,7 +1368,7 @@ impl <'a>Parser<'a> {
                     match tok_entry.tok_type {
                       Token::EndKW(_) => break,
                       _ => {
-                        let statement = self.statement(return_type);
+                        let statement = self.statement(builder, return_type);
                         self.resync();
                       }
                     }
@@ -1324,19 +1391,19 @@ impl <'a>Parser<'a> {
     } else { return if_kw; }
   }
   
-  pub fn loop_statement(&mut self, return_type: &Type) -> ParserResult {
+  pub fn loop_statement(&mut self, builder: &mut LLVMBuilderRef, return_type: &Type) -> ParserResult {
     let for_kw = self.parse_tok(tokens::for_kw::ForKW::start());
     if let ParserResult::Success(_) = for_kw {
       let l_paren = self.parse_tok(tokens::parens::LParen::start());
       if let ParserResult::Success(_) = l_paren {
-        let assignment_statement = self.assignment_statement();
+        let assignment_statement = self.assignment_statement(builder);
         if let ParserResult::Success(_) = assignment_statement {
           let semicolon = self.parse_tok(tokens::semicolon::Semicolon::start());
           if let ParserResult::Success(_) = semicolon {
             
             // loop statement expressions should evaluate to a boolean (invariant)
             let loop_expr_type = Type::Bool;
-            let expression = self.expression(&loop_expr_type);
+            let expression = self.expression(builder, &loop_expr_type);
             if let ParserResult::Success(expr_entry) = expression {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
               if let ParserResult::Success(r_paren_entry) = r_paren {
@@ -1354,7 +1421,7 @@ impl <'a>Parser<'a> {
                     match tok_entry.tok_type {
                       Token::EndKW(_) => break,
                       _ => {
-                        let statement = self.statement(return_type);
+                        let statement = self.statement(builder, return_type);
                         self.resync();
                       }
                     }
@@ -1375,24 +1442,30 @@ impl <'a>Parser<'a> {
     } else { return for_kw; }
   }
   
-  pub fn return_statement(&mut self, return_type: &Type) -> ParserResult {
+  pub fn return_statement(&mut self, builder: &mut LLVMBuilderRef, return_type: &Type) -> ParserResult {
     let return_kw = self.parse_tok(tokens::return_kw::ReturnKW::start());
     if let ParserResult::Success(return_entry) = return_kw {
-      let expression = self.expression(return_type);
+      let expression = self.expression(builder, return_type);
       if let ParserResult::Success(expr_entry) = &expression {
-        // check that that the expression type is compatible with bool
+        // check that that the expression type is compatible with expected type
         if !Parser::is_compatible(&return_type, &expr_entry.r#type) {
           return ParserResult::ErrInvalidType{line_num: return_entry.line_num,
                                               expected: vec![return_type.clone()],
                                               actual: expr_entry.r#type.clone()};
         }
+        
+        // debugging: return 0. In the future, will return the expression value
+        let ret = unsafe {
+          core::LLVMBuildRet(*builder, LLVMConstInt(core::LLVMInt32Type(), 0, 0))
+        };
+        
       }
       return expression;
       
     } else { return return_kw; }
   }
 
-  pub fn procedure_call_or_name(&mut self, resolve_type: &Type) -> ParserResult {
+  pub fn procedure_call_or_name(&mut self, builder: &mut LLVMBuilderRef, resolve_type: &Type) -> ParserResult {
     // this could be a procedure call or a name based on the next token
     let identifier = self.parse_tok(tokens::identifier::Identifier::start());
     
@@ -1400,15 +1473,15 @@ impl <'a>Parser<'a> {
     
     if let Some(tok_entry) = &peek_tok {
       if let Token::LParen(_) = &tok_entry.tok_type {
-        return self.procedure_call_w_identifier(identifier, resolve_type);
+        return self.procedure_call_w_identifier(builder, identifier, resolve_type);
       }
     }
     
-    return self.name_w_identifier(identifier);
+    return self.name_w_identifier(builder, identifier);
     
   }
   
-  pub fn name_or_number(&mut self) -> ParserResult {
+  pub fn name_or_number(&mut self, builder: &mut LLVMBuilderRef) -> ParserResult {
     
     // optionally parse a dash
     // TODO act on this value. May need to negate the number and reject non-multipliable
@@ -1421,14 +1494,14 @@ impl <'a>Parser<'a> {
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = &peek_tok {
       match &tok_entry.tok_type {
-        Token::Identifier(_) => { return self.name() },
+        Token::Identifier(_) => { return self.name(builder) },
         Token::Number(_) => { return self.parse_tok(tokens::number::Number::start()) },
         _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(<identifier>|<number>)"), actual: String::from(&tok_entry.chars[..])}; }
       }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn factor(&mut self, resolve_type: &Type) -> ParserResult {
+  pub fn factor(&mut self, builder: &mut LLVMBuilderRef, resolve_type: &Type) -> ParserResult {
     // peek at next token to decide what type of factor this will be
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = &peek_tok {
@@ -1437,7 +1510,7 @@ impl <'a>Parser<'a> {
           // resolve to a subexpression
           let l_paren = self.parse_tok(tokens::parens::LParen::start());
           if let ParserResult::Success(_) = l_paren {
-            let expression = self.expression(resolve_type);
+            let expression = self.expression(builder, resolve_type);
             if let ParserResult::Success(_) = expression {
               let r_paren = self.parse_tok(tokens::parens::RParen::start());
               if let ParserResult::Success(_) = r_paren {
@@ -1447,11 +1520,11 @@ impl <'a>Parser<'a> {
           } else { return l_paren; }
         },
         Token::Identifier(_) => { 
-          return self.procedure_call_or_name(resolve_type);
+          return self.procedure_call_or_name(builder, resolve_type);
         },
         Token::Dash(_) => {
           // this could be a name or number depending on the next token
-          return self.name_or_number();
+          return self.name_or_number(builder);
         },
         Token::String(_) => {
           return self.parse_tok(tokens::string::String::start());
@@ -1556,6 +1629,24 @@ impl <'a>Parser<'a> {
         }
       }
     }
+  }
+  
+  pub fn add_builtins(&mut self) {
+    let (get_bool, put_bool) = builtins::bool::initialize_bool_funcs(self.llvm_module);
+    self.add_builtin(get_bool);
+    self.add_builtin(put_bool);
+    
+    let (get_integer, put_integer) = builtins::integer::initialize_integer_funcs(self.llvm_module);
+    self.add_builtin(get_integer);
+    self.add_builtin(put_integer);
+    
+    let (get_float, put_float) = builtins::float::initialize_float_funcs(self.llvm_module);
+    self.add_builtin(get_float);
+    self.add_builtin(put_float);
+  }
+  
+  pub fn add_builtin(&mut self, builtin: TokenEntry) {
+    self.add_symbol(&Scope::Global, Rc::new(builtin));
   }
   
   fn is_compatible(expected_type: &Type, actual_type: &Type) -> bool {

@@ -1,6 +1,7 @@
 # ignore generated binaries
 *
 !*.*
+!*/
 
 # ignore build files
 target
@@ -8,3 +9,6 @@ target
 # ignore compiled test files
 *.o
 *.bc
+
+# ignore disassembled llvm files
+*.ll
