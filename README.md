@@ -31,6 +31,9 @@ After you have run the compiler, you will have a file named `<program_name>.bc` 
 1. Run `llc -filetype=obj <program_name>.bc`. This will output an object file, `<program_name>.o`.
 2. Run `gcc -o <desired_executable_name> <program_name>.o src/builtins/builtins.o` to link the program with builtins and output the executable.
 
+## Building and Compiling *.src to executable with make
+To build the compiler and run on a *.src file, run `make program NAME=<name>.src` to get an executable. The source file should be in `sample_programs/correct`.
+
 ## Uninstalling rust
 If you'd like to remove rust from your machine, simply run: `rustup self uninstall`.
 
