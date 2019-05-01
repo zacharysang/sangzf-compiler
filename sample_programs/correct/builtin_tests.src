@@ -3,12 +3,14 @@ Program builtin_tests is
 variable r1 : bool;
 variable r2 : bool;
 variable r3 : bool;
+variable r4 : bool;
 
 begin
 
 r1 := putBool(getBool());
-r2 := putInteger(5);
 r3 := putInteger(getInteger());
+r4 := putFloat(getFloat());
+
 
 /*Single #Line Block Comments*/
 

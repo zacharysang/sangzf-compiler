@@ -43,7 +43,7 @@ int putinteger(int val) {
 
 int getinteger() {
   int output;
-  scanf("%d *[^\n]", &output);
+  scanf("%d*[^\n]", &output);
 
   return output;
 }
@@ -57,7 +57,7 @@ int putfloat(float val) {
 
 float getfloat() {
   float output;
-  scanf("%f *[^\n]", &output);
+  scanf("%f*[^\n]", &output);
   
   return output;
 }
