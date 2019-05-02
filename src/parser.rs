@@ -711,7 +711,9 @@ impl <'a>Parser<'a> {
           
           // llvm function call
           let res = unsafe {
-            core::LLVMBuildCall(*builder, llvm_procedure, arg_list.as_mut_ptr(), arg_list.len() as u32, null_str())
+            let result = core::LLVMBuildCall(*builder, llvm_procedure, arg_list.as_mut_ptr(), arg_list.len() as u32, null_str());
+            
+            result
           };
           
           procedure_id.value_ref = res;
@@ -1265,6 +1267,8 @@ impl <'a>Parser<'a> {
     let expression = self.expression(builder, curr_arg_type);
     if let ParserResult::Success(entry) = &expression {
     
+      // cast value if needed
+    
       arg_list.push(entry.value_ref);
     
       // optionally parse the rest
@@ -1640,6 +1644,21 @@ impl <'a>Parser<'a> {
       return None;
     }
   }
+  
+  /*
+  pub fn coerce(builder: &mut LLVMBuilderRef, val: &mut LLVMValueRef, src_type: &Type, dest_type: &Type) -> Result<LLVMValueRef, ()> {
+    return match src_type {
+      Type::Integer => {
+        core::
+      },
+      Type::Float => {},
+      Type::Bool => {},
+      _ => {
+        val
+      }
+    }
+  }
+  */
   
   pub fn add_symbol(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope, tok_entry: Rc<TokenEntry>) {
     match scope {
