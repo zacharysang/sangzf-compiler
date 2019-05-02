@@ -77,7 +77,6 @@ impl <'a>Parser<'a> {
       }
     }
     */
-    self.add_builtins();
     
     let program_header = self.program_header();
     if let ParserResult::Success(identifier_entry) = program_header {
@@ -107,6 +106,9 @@ impl <'a>Parser<'a> {
         
         b
       };
+      
+      
+      self.add_builtins(&mut builder);
     
       let program_body = self.program_body(&mut builder);
       if let ParserResult::Success(_) = program_body {
@@ -195,7 +197,7 @@ impl <'a>Parser<'a> {
         match &tok_entry.tok_type {
           // these tokens are in First(declaration). Parse the declaration and a terminating semicolon
           Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => {
-            let declaration = self.declaration();
+            let declaration = self.declaration(builder);
             if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = &declaration {
               declaration.print();
             }
@@ -249,7 +251,7 @@ impl <'a>Parser<'a> {
     } else { begin_kw.print(); return begin_kw; }
   }
   
-  pub fn declaration(&mut self) -> ParserResult {
+  pub fn declaration(&mut self, builder: &mut LLVMBuilderRef) -> ParserResult {
   
     let scope = if let ParserResult::Success(..) = self.parse_tok(tokens::global_kw::GlobalKW::start()) {
       Scope::Global
@@ -259,9 +261,9 @@ impl <'a>Parser<'a> {
     
     if let Some(tok_entry) = self.lexer.peek() {
       match &tok_entry.tok_type {
-        Token::ProcedureKW(_tok) => { return self.procedure_declaration(&scope); },
-        Token::VariableKW(_tok) => {return self.variable_declaration(&scope); },
-        Token::TypeKW(_tok) => { return self.type_declaration(&scope); },
+        Token::ProcedureKW(_tok) => { return self.procedure_declaration(builder, &scope); },
+        Token::VariableKW(_tok) => {return self.variable_declaration(builder, &scope); },
+        Token::TypeKW(_tok) => { return self.type_declaration(builder, &scope); },
         _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(procedure|variable|type)"), actual: String::from(&tok_entry.chars[..])}; }
       }
       
@@ -270,7 +272,7 @@ impl <'a>Parser<'a> {
     }
   }
   
-  pub fn procedure_declaration(&mut self, scope: &Scope) -> ParserResult {
+  pub fn procedure_declaration(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope) -> ParserResult {
   
     let mut builder = unsafe {
       core::LLVMCreateBuilder()
@@ -310,7 +312,7 @@ impl <'a>Parser<'a> {
               let next_tok = self.lexer.peek();
               if let Some(tok_entry) = next_tok {
                 if let Token::VariableKW(_) = &tok_entry.tok_type {
-                  self.parameter_list(scope, &mut procedure_type);
+                  self.parameter_list(builder, scope, &mut procedure_type);
                 }
               }
               
@@ -368,16 +370,16 @@ impl <'a>Parser<'a> {
                 
                 // include procedure_id in this new symbol table (allow recursive calls)
                 let procedure_scope = Scope::Local;
-                self.add_symbol(&procedure_scope, Rc::clone(&procedure_symbol));
+                self.add_symbol(builder, &procedure_scope, Rc::clone(&procedure_symbol));
                 
                 // add procedure_id to the containing scope (pop procedure scope off then push back)
                 if let Scope::Local = &scope {
                   if let Some(procedure_table) = self.symbol_table_chain.pop() {
-                    self.add_symbol(&scope, Rc::clone(&procedure_symbol));
+                    self.add_symbol(builder, &scope, Rc::clone(&procedure_symbol));
                     self.symbol_table_chain.push(procedure_table);
                   }
                 } else if let Scope::Global = &scope {
-                  self.add_symbol(&scope, Rc::clone(&procedure_symbol));
+                  self.add_symbol(builder, &scope, Rc::clone(&procedure_symbol));
                 }
               
                 return ParserResult::Success(result_type);
@@ -469,9 +471,9 @@ impl <'a>Parser<'a> {
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
-  pub fn parameter_list(&mut self, scope: &Scope, procedure: &mut Type) -> ParserResult {
+  pub fn parameter_list(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope, procedure: &mut Type) -> ParserResult {
     
-    let parameter = self.parameter(scope);
+    let parameter = self.parameter(builder, scope);
     if let ParserResult::Success(param_entry) = &parameter {
     
       // add this parameter type to the procedure type
@@ -485,7 +487,7 @@ impl <'a>Parser<'a> {
       let comma = self.parse_tok(tokens::comma::Comma::start());
       if let ParserResult::Success(_) = comma {
         // call recursively to parse the rest of the list
-        return self.parameter_list(scope, procedure);
+        return self.parameter_list(builder, scope, procedure);
       } else {
         return parameter;
       }
@@ -497,8 +499,8 @@ impl <'a>Parser<'a> {
     
   }
   
-  pub fn parameter(&mut self, scope: &Scope) -> ParserResult {
-    return self.variable_declaration(scope);
+  pub fn parameter(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope) -> ParserResult {
+    return self.variable_declaration(builder, scope);
   }
   
   pub fn procedure_body(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope, return_type: &Type) -> ParserResult {
@@ -511,7 +513,7 @@ impl <'a>Parser<'a> {
         match &tok_entry.tok_type {
           // these tokens are in First(declaration). Parse the declaration and a terminating semicolon
           Token::GlobalKW(_) | Token::ProcedureKW(_) | Token::VariableKW(_) | Token::TypeKW(_) => {
-            let declaration = self.declaration();
+            let declaration = self.declaration(builder);
             if let ParserResult::ErrUnexpectedEnd | ParserResult::ErrUnexpectedTok{..} | ParserResult::Error{..} = declaration {
               declaration.print();
             }
@@ -564,7 +566,7 @@ impl <'a>Parser<'a> {
     } else { return begin_kw; }
   }
   
-  pub fn variable_declaration(&mut self, scope: &Scope) -> ParserResult {
+  pub fn variable_declaration(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope) -> ParserResult {
     
     let variable_kw = self.parse_tok(tokens::variable_kw::VariableKW::start());
     if let ParserResult::Success(_) = variable_kw {
@@ -573,7 +575,11 @@ impl <'a>Parser<'a> {
         let colon = self.parse_tok(tokens::colon::Colon::start());
         if let ParserResult::Success(_) = colon {
           let type_mark = self.type_mark();
-          if let ParserResult::Success(variable_type) = type_mark {
+          if let ParserResult::Success(mut variable_type) = type_mark {
+            
+            variable_type.r#type = Parser::get_type(&variable_type);
+            
+            variable_id.value_ref = unsafe {core::LLVMBuildAlloca(*builder, get_llvm_type(&variable_type.r#type), c_str(&variable_id.chars[..]))};
             
             // optionally parse a bound (making this variable an array)
             let l_bracket = self.parse_tok(tokens::brackets::LBracket::start());
@@ -590,9 +596,9 @@ impl <'a>Parser<'a> {
                     Err(_) => 0
                   };
                   variable_id.r#type = Type::Array(Box::new(arr_type), arr_size);
-                
+                  
                   // if successful, add the variable to the symbol table
-                  self.add_symbol(scope, Rc::new(variable_id));
+                  self.add_symbol(builder, scope, Rc::new(variable_id));
                 
                   return ParserResult::Success(variable_type);
                 } else {
@@ -607,7 +613,7 @@ impl <'a>Parser<'a> {
             variable_id.r#type = Parser::get_type(&variable_type);
             
             // if successful without bounds, also add to symbol table
-            self.add_symbol(scope, Rc::new(variable_id));
+            self.add_symbol(builder, scope, Rc::new(variable_id));
             
             return ParserResult::Success(variable_type);
             
@@ -626,7 +632,7 @@ impl <'a>Parser<'a> {
     
   }
   
-  pub fn type_declaration(&mut self, scope: &Scope) -> ParserResult {
+  pub fn type_declaration(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope) -> ParserResult {
     let type_kw = self.parse_tok(tokens::type_kw::TypeKW::start());
     if let ParserResult::Success(_) = type_kw {
       let identifier = self.parse_tok(tokens::identifier::Identifier::start());
@@ -639,7 +645,7 @@ impl <'a>Parser<'a> {
             // change the token entry type
             type_id.r#type = Type::Type(Box::new(Parser::get_type(&type_entry)));
             
-            self.add_symbol(scope, Rc::new(type_id));
+            self.add_symbol(builder, scope, Rc::new(type_id));
           
             return type_mark;
           } else { return type_mark; }
@@ -739,7 +745,11 @@ impl <'a>Parser<'a> {
       
       id_entry.r#type = val_type;
     
-      // optionally parse square bracket if array
+      // prepare a value to load into
+      let value = unsafe { core::LLVMBuildLoad(*builder, symbol.value_ref, c_str(&id_entry.chars[..])) };
+      id_entry.value_ref = value;
+    
+      // optionally parse square bracket
       let peek_tok = self.lexer.peek();
       if let Some(tok_entry) = peek_tok {
         // if next up is an LBracket, commit to parsing this optional portion
@@ -753,12 +763,13 @@ impl <'a>Parser<'a> {
             let r_bracket = self.parse_tok(tokens::brackets::RBracket::start());
             if let ParserResult::Success(_) = r_bracket {
             
+              // if indexing, check that this is actually an array
               if let Type::Array(..) = id_entry.r#type {} else {
                 return ParserResult::ErrInvalidType{line_num: id_entry.line_num,
                                                     expected: vec![Type::Array(Box::new(Type::None), 0)],
                                                     actual: id_entry.r#type.clone()};
               }
-            
+              
               return identifier;
             } else { return r_bracket; }
           } else { return expression; }
@@ -1268,29 +1279,40 @@ impl <'a>Parser<'a> {
   
   pub fn assignment_statement(&mut self, builder: &mut LLVMBuilderRef) -> ParserResult {
     let destination = self.destination(builder);
-    if let ParserResult::Success(dest_id) = destination {
+    if let ParserResult::Success(mut dest_id) = destination {
     
       // look up the destination in the symbol table to retrieve the type
-      let dest_type = match self.get_symbol(&dest_id.chars) {
-        Some(entry) => entry.r#type.clone(),
-        None => return ParserResult::ErrSymbolNotFound{name: dest_id.chars, line_num: dest_id.line_num}
-      };
+      if let Some(dest) = self.get_symbol(&dest_id.chars) {
+        let dest_type = dest.r#type.clone();
+        let dest_value_ref = dest.value_ref.clone();
+        
+        let assign = self.parse_tok(tokens::assign::Assign::start());
+        if let ParserResult::Success(assign_entry) = assign {
+          let expression = self.expression(builder, &dest_type);
+          if let ParserResult::Success(expr_entry) = &expression {
+          
+            // enforce that the expression type is compatible with destination type
+            if !Parser::is_compatible(&dest_type, &expr_entry.r#type) {
+              return ParserResult::ErrInvalidType{line_num: assign_entry.line_num,
+                                                  expected: vec![dest_type],
+                                                  actual: expr_entry.r#type.clone()};
+            }
+            
+            // store the value in alloca
+            unsafe { 
+            
+              // TODO check that the value is a pointer (alloca)
+            
+              // store the expression value
+              core::LLVMBuildStore(*builder, expr_entry.value_ref, dest_value_ref);
+            };
+          
+            return ParserResult::Success(dest_id);
+          } else { return expression; }
+        } else { return assign; }
+        
+      } else { return ParserResult::ErrSymbolNotFound{name: dest_id.chars, line_num: dest_id.line_num}; }
       
-      let assign = self.parse_tok(tokens::assign::Assign::start());
-      if let ParserResult::Success(assign_entry) = assign {
-        let expression = self.expression(builder, &dest_type);
-        if let ParserResult::Success(expr_entry) = &expression {
-        
-          // enforce that the expression type is compatible with destination type
-          if !Parser::is_compatible(&dest_type, &expr_entry.r#type) {
-            return ParserResult::ErrInvalidType{line_num: assign_entry.line_num,
-                                                expected: vec![dest_type],
-                                                actual: expr_entry.r#type.clone()};
-          }
-        
-          return expression;
-        } else { return expression; }
-      } else { return assign; }
     } else { return destination; }
   }
   
@@ -1487,11 +1509,17 @@ impl <'a>Parser<'a> {
     
     let peek_tok = self.lexer.peek();
     if let Some(tok_entry) = &peek_tok {
-      match &tok_entry.tok_type {
-        Token::Identifier(_) => { return self.name(builder) },
-        Token::Number(_) => { return self.parse_tok(tokens::number::Number::start()) },
+      let value = match &tok_entry.tok_type {
+        Token::Identifier(_) => { self.name(builder) },
+        Token::Number(_) => { self.parse_tok(tokens::number::Number::start()) },
         _ => { return ParserResult::ErrUnexpectedTok {line_num: tok_entry.line_num, expected: String::from("(<identifier>|<number>)"), actual: String::from(&tok_entry.chars[..])}; }
-      }
+      };
+      
+      if let ParserResult::Success(value_entry) = &value {
+        // TODO apply negation here
+      
+        return value;
+      } else { return value; }
     } else { return ParserResult::ErrUnexpectedEnd; }
   }
   
@@ -1613,7 +1641,7 @@ impl <'a>Parser<'a> {
     }
   }
   
-  pub fn add_symbol(&mut self, scope: &Scope, tok_entry: Rc<TokenEntry>) {
+  pub fn add_symbol(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope, tok_entry: Rc<TokenEntry>) {
     match scope {
       Scope::Local => {
         if let Some(table) = self.symbol_table_chain.last_mut() {
@@ -1628,22 +1656,22 @@ impl <'a>Parser<'a> {
     }
   }
   
-  pub fn add_builtins(&mut self) {
+  pub fn add_builtins(&mut self, builder: &mut LLVMBuilderRef) {
     let (get_bool, put_bool) = builtins::bool::initialize_bool_funcs(self.llvm_module);
-    self.add_builtin(get_bool);
-    self.add_builtin(put_bool);
+    self.add_builtin(builder, get_bool);
+    self.add_builtin(builder, put_bool);
     
     let (get_integer, put_integer) = builtins::integer::initialize_integer_funcs(self.llvm_module);
-    self.add_builtin(get_integer);
-    self.add_builtin(put_integer);
+    self.add_builtin(builder, get_integer);
+    self.add_builtin(builder, put_integer);
     
     let (get_float, put_float) = builtins::float::initialize_float_funcs(self.llvm_module);
-    self.add_builtin(get_float);
-    self.add_builtin(put_float);
+    self.add_builtin(builder, get_float);
+    self.add_builtin(builder, put_float);
   }
   
-  pub fn add_builtin(&mut self, builtin: TokenEntry) {
-    self.add_symbol(&Scope::Global, Rc::new(builtin));
+  pub fn add_builtin(&mut self, builder: &mut LLVMBuilderRef, builtin: TokenEntry) {
+    self.add_symbol(builder, &Scope::Global, Rc::new(builtin));
   }
   
   fn is_compatible(expected_type: &Type, actual_type: &Type) -> bool {

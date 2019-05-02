@@ -7,9 +7,13 @@ variable r4 : bool;
 
 begin
 
-r1 := putBool(getBool());
-r3 := putInteger(getInteger());
-r4 := putFloat(getFloat());
+r1 := getInteger();
+r2 := r1;
+r2 := putInteger(r2);
+//putInteger(r1);
+//r1 := putBool(getBool());
+//r3 := putInteger(getInteger());
+//r4 := putFloat(getFloat());
 
 
 /*Single #Line Block Comments*/

@@ -229,6 +229,8 @@ impl <'a> Iterator for Lexer<'a> {
             Ok(val) => val,
             Err(err) => {
               println!("Error getting llvm value from token chars: {}", err);
+              
+              // default type is a 0 int
               unsafe { core::LLVMConstInt(core::LLVMInt32Type(), 0, 0) }
             }
           };
