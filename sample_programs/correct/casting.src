@@ -1,0 +1,41 @@
+Program casting is 
+
+variable r1 : bool;
+variable r2 : bool;
+variable r3 : bool;
+variable r4 : bool;
+
+variable f1 : float;
+variable i1 : integer;
+variable i2 : integer;
+variable b1 : bool;
+
+begin
+
+// cast int to bool
+b1 := getInteger();
+
+r1 := putBool(b1);
+r1 := putInteger(b1);
+
+/*
+// cast int to float
+f1 := getInteger();
+
+r2 := putFloat(f1);
+r2 := putInteger(f1);
+
+// cast bool to int
+i1 := getBool();
+
+r3 := putInteger(i1);
+r3 := putBool(i1);
+
+// cast float to int
+i2 := getFloat();
+
+r4 := putInteger(i2);
+r4 := putFloat(i2);
+*/
+
+end program.

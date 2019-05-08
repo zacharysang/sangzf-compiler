@@ -1293,7 +1293,7 @@ impl <'a>Parser<'a> {
         let assign = self.parse_tok(tokens::assign::Assign::start());
         if let ParserResult::Success(assign_entry) = assign {
           let expression = self.expression(builder, &dest_type);
-          if let ParserResult::Success(expr_entry) = &expression {
+          if let ParserResult::Success(mut expr_entry) = expression {
           
             // enforce that the expression type is compatible with destination type
             if !Parser::is_compatible(&dest_type, &expr_entry.r#type) {
@@ -1302,9 +1302,15 @@ impl <'a>Parser<'a> {
                                                   actual: expr_entry.r#type.clone()};
             }
             
-            // store the value in alloca
-            unsafe { 
+            // coerce the type if necessary
+            // cast the expression to the return type
+            let coercion = Parser::coerce(builder, &expr_entry.r#type, &dest_type, &mut expr_entry.value_ref);
+            if let Result::Ok(coerced_val) = coercion {
+              expr_entry.value_ref = coerced_val;
+            }
             
+            // store the value in alloca
+            unsafe {
               // TODO check that the value is a pointer (alloca)
             
               // store the expression value
@@ -1467,7 +1473,7 @@ impl <'a>Parser<'a> {
     let return_kw = self.parse_tok(tokens::return_kw::ReturnKW::start());
     if let ParserResult::Success(return_entry) = return_kw {
       let expression = self.expression(builder, return_type);
-      if let ParserResult::Success(expr_entry) = &expression {
+      if let ParserResult::Success(mut expr_entry) = expression {
         // check that that the expression type is compatible with expected type
         if !Parser::is_compatible(&return_type, &expr_entry.r#type) {
           return ParserResult::ErrInvalidType{line_num: return_entry.line_num,
@@ -1475,13 +1481,21 @@ impl <'a>Parser<'a> {
                                               actual: expr_entry.r#type.clone()};
         }
         
+        // cast the expression to the return type
+        let coercion = Parser::coerce(builder, &expr_entry.r#type, return_type, &mut expr_entry.value_ref);
+        if let Result::Ok(coerced_val) = coercion {
+          expr_entry.value_ref = coerced_val;
+        }
+        
         let ret = unsafe {
           core::LLVMBuildRet(*builder, expr_entry.value_ref)
         };
         
+        return ParserResult::Success(expr_entry);
+        
+      } else {
+        return expression;
       }
-      return expression;
-      
     } else { return return_kw; }
   }
 
@@ -1645,21 +1659,6 @@ impl <'a>Parser<'a> {
     }
   }
   
-  /*
-  pub fn coerce(builder: &mut LLVMBuilderRef, val: &mut LLVMValueRef, src_type: &Type, dest_type: &Type) -> Result<LLVMValueRef, ()> {
-    return match src_type {
-      Type::Integer => {
-        core::
-      },
-      Type::Float => {},
-      Type::Bool => {},
-      _ => {
-        val
-      }
-    }
-  }
-  */
-  
   pub fn add_symbol(&mut self, builder: &mut LLVMBuilderRef, scope: &Scope, tok_entry: Rc<TokenEntry>) {
     match scope {
       Scope::Local => {
@@ -1691,6 +1690,31 @@ impl <'a>Parser<'a> {
   
   pub fn add_builtin(&mut self, builder: &mut LLVMBuilderRef, builtin: TokenEntry) {
     self.add_symbol(builder, &Scope::Global, Rc::new(builtin));
+  }
+  
+  pub fn coerce(builder: &mut LLVMBuilderRef, from_type: &Type, to_type: &Type, value: &mut LLVMValueRef) -> Result<LLVMValueRef, ()> {
+  
+    if mem::discriminant(from_type) == mem::discriminant(to_type) {
+      return Ok(*value);
+    }
+  
+    return match (from_type, to_type) {
+      (Type::Integer, Type::Bool) => {
+        let res = unsafe {
+          let is_true = core::LLVMBuildICmp(*builder, llvm_sys::LLVMIntPredicate::LLVMIntNE, *value, LLVMConstInt(core::LLVMInt32Type(), 0, 0), null_str());
+          core::LLVMBuildZExt(*builder, is_true, core::LLVMInt32Type(), null_str())
+        };
+        
+        Ok(res)
+      },
+      (Type::Integer, Type::Float) => Ok(unsafe { core::LLVMBuildSIToFP(*builder, *value, get_llvm_type(to_type), null_str()) }),
+      (Type::Float, Type::Integer) => Ok(unsafe { core::LLVMBuildFPToSI(*builder, *value, get_llvm_type(to_type), null_str()) }),
+      (Type::Bool, Type::Integer) => Ok(unsafe { core::LLVMBuildIntCast(*builder, *value, get_llvm_type(to_type), null_str()) }),
+      _ => {
+        println!("error while coercing");
+        Err(())
+      }
+    };
   }
   
   fn is_compatible(expected_type: &Type, actual_type: &Type) -> bool {
