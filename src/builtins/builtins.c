@@ -18,34 +18,11 @@ int putbool(int val) {
   return 0;
 }
 
-int getbool() {
-  const int MAX_LEN = 2;
-
-  char input[MAX_LEN];
-  fgets(input, MAX_LEN, stdin);
-
-  if (strncmp("1", input, MAX_LEN) == 0) {
-    return 1;
-  } else if (strncmp("0", input, MAX_LEN) == 0) {
-    return 0;
-  } else {
-    printf("Invalid boolean provided: '%s'. Defaulting to FALSE\n", input);
-    return 0;
-  }
-}
-
 // Integer functions
 int putinteger(int val) {
   printf("%d\n", val);
   
   return 0;
-}
-
-int getinteger() {
-  int output;
-  scanf("%d*[^\n]", &output);
-
-  return output;
 }
 
 // Float functions
@@ -55,9 +32,29 @@ int putfloat(float val) {
   return 0;
 }
 
+int getbool() {
+  int output;
+  
+  scanf("%d%*[^\n]", &output);
+
+  if (output == 0) {
+    return 0;
+  } else {
+    return 1;
+  }
+}
+
+
+int getinteger() {
+  int output;
+  scanf("%d%*[^\n]", &output);
+
+  return output;
+}
+
 float getfloat() {
   float output;
-  scanf("%f*[^\n]", &output);
+  scanf("%f%*[^\n]", &output);
   
   return output;
 }

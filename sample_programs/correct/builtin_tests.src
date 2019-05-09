@@ -3,43 +3,21 @@ Program builtin_tests is
 variable r1 : bool;
 variable r2 : bool;
 variable r3 : bool;
-variable r4 : bool;
 
 variable f1 : float;
 variable i1 : integer;
-/*
-procedure ret_in_int: bool()
-  variable x1 : integer;
-  variable x2 : integer;
-begin
-  x1 := getInteger();
-  x2 := putInteger(x1);
-  return x1;
-end procedure;
-*/
+variable b1 : bool;
 
 begin
 
-r1 := getInteger();
-r2 := putbool(r1);
-r3 := putinteger(r1);
+i1 := getinteger();
+r3 := putinteger(i1);
 
-f1 := getFloat();
-r4 := putFloat(f1);
+b1 := getbool();
+r2 := putbool(b1);
 
-//r1 := ret_in_int();
-//r2 := putFloat(r1);
-//r2 := putBool(r1);
-//r2 := putInteger(r1);
-
-//r1 := getInteger();
-//r2 := r1;
-//r2 := putInteger(r2);
-//putInteger(r1);
-//r1 := putBool(getBool());
-//r3 := putInteger(getInteger());
-//r4 := putFloat(getFloat());
-
+f1 := getfloat();
+r1 := putfloat(f1);
 
 /*Single #Line Block Comments*/
 

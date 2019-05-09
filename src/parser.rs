@@ -132,7 +132,8 @@ impl <'a>Parser<'a> {
         // output contents of llvm program
         unsafe {
           if bit_writer::LLVMWriteBitcodeToFile(self.llvm_module, c_str(&filename)) != 0 {
-            println!("error writing bitcode to file, skipping\n");
+            //core::LLVMPrintModuleToFile(self.llvm_module, c_str("dump.ll"), error_buffer());
+            //println!("error writing bitcode to file, dumping ir to file\n");
           }
         }
         
@@ -1265,11 +1266,16 @@ impl <'a>Parser<'a> {
     }
   
     let expression = self.expression(builder, curr_arg_type);
-    if let ParserResult::Success(entry) = &expression {
+    if let ParserResult::Success(mut entry) = expression {
     
       // cast value if needed
-    
-      arg_list.push(entry.value_ref);
+      let arg_val = if let Ok(val) = Parser::coerce(builder, &entry.r#type, &curr_arg_type, &mut entry.value_ref) {
+        val
+      } else {
+        entry.value_ref
+      };
+      
+      arg_list.push(arg_val);
     
       // optionally parse the rest
       let comma = self.parse_tok(tokens::comma::Comma::start());
@@ -1277,7 +1283,7 @@ impl <'a>Parser<'a> {
         return self.argument_list(builder, arg_list, param_types);
       }
       
-      return expression;
+      return ParserResult::Success(entry);
     } else { return expression; }
   }
   
