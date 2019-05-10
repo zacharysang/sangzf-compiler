@@ -1,0 +1,15 @@
+Program term is 
+
+variable r1 : bool;
+variable r2 : bool;
+
+variable f1 : float;
+variable f2 : float;
+
+begin
+
+// test multiplication
+f1 := getfloat();
+r1 := putfloat(f1*f1);
+
+end program.

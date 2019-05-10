@@ -797,7 +797,7 @@ impl <'a>Parser<'a> {
       let asterisk = slf.parse_tok(tokens::asterisk::Asterisk::start());
       if let ParserResult::Success(_) = asterisk {
         let factor = slf.factor(builder, resolve_type);
-        if let ParserResult::Success(factor_entry) = factor {
+        if let ParserResult::Success(mut factor_entry) = factor {
         
           // ensure that left and factor are integer or float (both compatible with float)
           let float_type = Type::Float;
@@ -810,9 +810,22 @@ impl <'a>Parser<'a> {
                                                 expected: vec![float_type, Type::Integer],
                                                 actual: factor_entry.r#type};
           } else {
+            // coerce left and factor into float type
+            if let Ok(val) = Parser::coerce(builder, &left.r#type, &Type::Float, &mut left.value_ref) {
+              left.value_ref = val;
+            }
+            
+            if let Ok(val) = Parser::coerce(builder, &mut factor_entry.r#type, &Type::Float, &mut factor_entry.value_ref) {
+              factor_entry.value_ref = val;
+            }
+            
             // fold factor_entry into left
+            let mul_result = unsafe {
+              core::LLVMBuildFMul(*builder, left.value_ref, factor_entry.value_ref, null_str())
+            };
             
             // upgrade the accumulated type to a float
+            left.value_ref = mul_result;
             left.r#type = float_type;
             left.line_num = factor_entry.line_num;
           }
