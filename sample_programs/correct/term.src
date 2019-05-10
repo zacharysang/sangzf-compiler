@@ -12,4 +12,8 @@ begin
 f1 := getfloat();
 r1 := putfloat(f1*f1);
 
+// test division
+f2 := getfloat();
+r2 := putfloat(f2/3);
+
 end program.
