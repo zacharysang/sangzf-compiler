@@ -1,0 +1,23 @@
+Program arith_op is 
+
+variable r1 : bool;
+variable r2 : bool;
+
+variable f1 : float;
+
+variable i1 : integer;
+variable i2 : integer;
+
+begin
+
+// test multiplication
+f1 := getfloat();
+i1 := getinteger();
+
+r1 := putfloat(f1+i1);
+
+i2 := getInteger();
+
+r2 := putinteger(i1 + i2);
+
+end program.

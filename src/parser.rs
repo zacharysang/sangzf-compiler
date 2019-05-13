@@ -1094,7 +1094,7 @@ impl <'a>Parser<'a> {
             let plus = slf.parse_tok(tokens::plus::Plus::start());
             if let ParserResult::Success(_) = plus {
               let relation = slf.relation(builder, resolve_type);
-              if let ParserResult::Success(relation_entry) = relation {
+              if let ParserResult::Success(mut relation_entry) = relation {
               
                 if !Parser::is_compatible(&float_type, &left.r#type) {
                   return ParserResult::ErrInvalidType{line_num: left.line_num,
@@ -1108,12 +1108,19 @@ impl <'a>Parser<'a> {
                                                       actual: relation_entry.r#type};
                 }
                 
-                // fold relation entry into left
+                // (idempotent) sync operand types
+                Parser::upcast(builder, &mut left, &mut relation_entry);
                 
-                // convert the type if relation_entry is a float
-                if let Type::Float = &relation_entry.r#type {
-                  left.r#type = float_type;
-                }
+                // fold relation entry into left
+                left.value_ref = unsafe {
+                  if let &Type::Float = &left.r#type {
+                    core::LLVMBuildFAdd(*builder, left.value_ref, relation_entry.value_ref, null_str())
+                  } else if let &Type::Integer = &left.r#type {
+                    core::LLVMBuildAdd(*builder, left.value_ref, relation_entry.value_ref, null_str())
+                  } else {
+                    panic!("Invalid operand type for addition (not integer or float). The type-checker should have caught this?");
+                  }
+                };
                 
                 left.line_num = relation_entry.line_num;
               
@@ -1129,7 +1136,7 @@ impl <'a>Parser<'a> {
             let dash = slf.parse_tok(tokens::dash::Dash::start());
             if let ParserResult::Success(_) = dash {
               let relation = slf.relation(builder, resolve_type);
-              if let ParserResult::Success(relation_entry) = relation {
+              if let ParserResult::Success(mut relation_entry) = relation {
               
                 // check left and relation_entry have the correct types
                 if !Parser::is_compatible(&float_type, &left.r#type) {
@@ -1144,11 +1151,21 @@ impl <'a>Parser<'a> {
                                                       actual: relation_entry.r#type};
                 }
                 
+                // sync operand types
+                Parser::upcast(builder, &mut left, &mut relation_entry);
+                
                 // fold relation entry into left by '-'
-                // type will be float if either arg is a float. otherwise int
-                if let Type::Float = &relation_entry.r#type {
-                  left.r#type = float_type;
-                }
+                left.value_ref = unsafe {
+                  if let &Type::Float = &left.r#type {
+                    core::LLVMBuildFSub(*builder, left.value_ref, relation_entry.value_ref, null_str())
+                  } else if let &Type::Integer = &left.r#type {
+                    core::LLVMBuildSub(*builder, left.value_ref, relation_entry.value_ref, null_str())
+                  } else {
+                    panic!("Invalid operand type for subtraction (not integer or flaot). The type-checker should have caught this?");
+                  }
+                };
+                
+                
                 left.line_num = relation_entry.line_num;
               
                 return _arith_op(slf, builder, resolve_type, left);
@@ -1722,6 +1739,45 @@ impl <'a>Parser<'a> {
   
   pub fn add_builtin(&mut self, builder: &mut LLVMBuilderRef, builtin: TokenEntry) {
     self.add_symbol(builder, &Scope::Global, Rc::new(builtin));
+  }
+  
+  // losslessly converts the value_ref of each token entry to have matching types
+  pub fn upcast(builder: &mut LLVMBuilderRef, from_entry: &mut TokenEntry, to_entry: &mut TokenEntry) {
+  
+    // if types already match, no change required
+    if mem::discriminant(&from_entry.r#type) == mem::discriminant(&to_entry.r#type) {
+      return;
+    }
+  
+    match (&from_entry.r#type, &to_entry.r#type) {
+      (Type::Integer, Type::Float) | (Type::Float, Type::Integer) => {
+        let int_entry = if let Type::Integer = &from_entry.r#type {
+          from_entry
+        } else {
+          to_entry
+        };
+        
+        // upcast int value to float
+        if let Ok(res) = Parser::coerce(builder, &Type::Integer, &Type::Float, &mut int_entry.value_ref) {
+          int_entry.value_ref = res;
+          int_entry.r#type = Type::Float;
+        }
+      },
+      (Type::Integer, Type::Bool) | (Type::Bool, Type::Integer) => {
+        let bool_entry = if let Type::Bool = &from_entry.r#type {
+          from_entry
+        } else {
+          to_entry
+        };
+        
+        // upcast bool value to integer
+        if let Ok(res) = Parser::coerce(builder, &Type::Bool, &Type::Integer, &mut bool_entry.value_ref) {
+          bool_entry.value_ref = res;
+          bool_entry.r#type = Type::Integer;
+        }
+      },
+      _ => () // no change if upcast pattern isn't matched
+    }
   }
   
   pub fn coerce(builder: &mut LLVMBuilderRef, from_type: &Type, to_type: &Type, value: &mut LLVMValueRef) -> Result<LLVMValueRef, ()> {
